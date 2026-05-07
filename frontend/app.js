@@ -1,5 +1,5 @@
 /* ── Config ─────────────────────────────────────── */
-const API_BASE = 'http://k8s-default-todoingr-096e8f96c2-1251263405.us-east-1.elb.amazonaws.com';   // ← change if your server runs elsewhere
+const API_BASE = 'www.ankit.services';   // ← change if your server runs elsewhere
 
 /* ── State ──────────────────────────────────────── */
 let todos       = [];
