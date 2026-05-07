@@ -1,0 +1,97 @@
+# =============================================================================
+# Docker Compose — local development only
+# Mirrors the Kubernetes architecture: frontend and backend are separate
+# services using the same image, with command: overriding the entrypoint.
+#
+# NOT for production. Production runs on Kubernetes via the Jenkinsfile.
+# =============================================================================
+
+version: "3.9"
+
+services:
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  # Serves static files using `serve`, same command as the K8s frontend deployment.
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: serve -s frontend -l 3000
+    ports:
+      - "3000:3000"          # http://localhost:3000
+    depends_on:
+      - backend
+    networks:
+      - todo-network
+    restart: on-failure
+
+  # ── Backend ─────────────────────────────────────────────────────────────────
+  # Express API, same command as the K8s backend deployment.
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node backend/src/app.js
+    ports:
+      - "5000:3000"          # http://localhost:5000 → container:3000
+    environment:
+      PORT:         "3000"
+      DB_NAME:      "todos"
+      DB_HOST:      mysql
+      DB_USER:      todo_user
+      DB_PASSWORD:  todo_pass
+      REDIS_HOST:   redis
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - todo-network
+    restart: on-failure
+
+  # ── MySQL ────────────────────────────────────────────────────────────────────
+  # Local stand-in for RDS. Data is persisted in a named volume.
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE:      todos
+      MYSQL_USER:          todo_user
+      MYSQL_PASSWORD:      todo_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - todo-mysql-data:/var/lib/mysql
+    networks:
+      - todo-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-utodo_user", "-ptodo_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  # Local stand-in for ElastiCache.
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - todo-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+# ── Shared network ─────────────────────────────────────────────────────────────
+networks:
+  todo-network:
+    driver: bridge
+
+# ── Persistent volumes ─────────────────────────────────────────────────────────
+volumes:
+  todo-mysql-data:

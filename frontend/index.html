@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TODOS</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <div class="noise"></div>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">TODOS<span class="dot">.</span></div>
+      <div class="health-badge" id="healthBadge">
+        <span class="pulse"></span>
+        <span id="healthText">CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="sub">track it. ship it. delete it.</p>
+    </section>
+
+    <section class="input-area">
+      <div class="input-row">
+        <input
+          type="text"
+          id="todoInput"
+          placeholder="new task..."
+          autocomplete="off"
+          maxlength="255"
+        />
+        <button id="addBtn" onclick="createTodo()">
+          <span>ADD</span>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div id="errorMsg" class="error-msg"></div>
+    </section>
+
+    <section class="filters">
+      <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">ALL</button>
+      <button class="filter-btn" data-filter="pending" onclick="setFilter('pending', this)">PENDING</button>
+      <button class="filter-btn" data-filter="completed" onclick="setFilter('completed', this)">DONE</button>
+    </section>
+
+    <section class="list-area">
+      <div id="loadingState" class="loading-state">
+        <div class="spinner"></div>
+        <span>fetching todos...</span>
+      </div>
+      <div id="emptyState" class="empty-state hidden">
+        <div class="empty-icon">◻</div>
+        <p>nothing here yet.</p>
+      </div>
+      <ul id="todoList"></ul>
+    </section>
+
+    <footer class="stats-bar">
+      <span id="statsText">— items</span>
+      <span class="cache-note">cache TTL: 60s</span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
