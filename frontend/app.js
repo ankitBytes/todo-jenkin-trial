@@ -1,5 +1,5 @@
 /* ── Config ─────────────────────────────────────── */
-const API_BASE = 'www.ankit.services';   // ← change if your server runs elsewhere
+const API_BASE = '';   // ← change if your server runs elsewhere
 
 /* ── State ──────────────────────────────────────── */
 let todos       = [];
