@@ -4,8 +4,8 @@ pipeline {
     environment {
         AWS_REGION      = 'us-east-1'
         ECR_REPO        = '668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-trial'
-        ECS_CLUSTER = 'todo-tf-cluster'
-	ECS_SERVICE = 'todo-tf-service'
+        ECS_CLUSTER	= 'todo-tf-cluster'
+	ECS_SERVICE	= 'todo-tf-service'
         IMAGE_TAG       = "v${BUILD_NUMBER}"
     }
 
@@ -61,7 +61,7 @@ pipeline {
                     NEW_TASK_DEF=\$(echo \$TASK_DEF_JSON | \
                         jq --arg IMAGE "${ECR_REPO}:${IMAGE_TAG}" \
                         --arg NAME "todo-tf-app" \
-			'(.containerDefinitions[] | select(.name == $NAME) | .image) = $IMAGE')
+			'(.containerDefinitions[] | select(.name == \$NAME) | .image) = \$IMAGE')
 
                     # Register new task definition revision
                     NEW_TASK_ARN=\$(aws ecs register-task-definition \
