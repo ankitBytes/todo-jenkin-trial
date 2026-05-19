@@ -1,0 +1,8 @@
+node_modules/
+.env
+global-bundle.pem
+secret.yaml
+configmap.yaml
+deployment.yaml
+ingress.yaml
+service.yaml

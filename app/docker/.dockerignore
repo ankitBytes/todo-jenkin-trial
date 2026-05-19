@@ -1,0 +1,10 @@
+**/node_modules
+**/.env
+**/.git
+**/.gitignore
+**/k8s
+**/ci
+**/*.log
+**/docker-compose.yaml
+**/.dockerignore
+**/full-project-analysis.md

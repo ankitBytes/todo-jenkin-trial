@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+# Run as non-root
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+# Layer-cache: install deps before copying source
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY src/ ./src/
+
+# Ensure the non-root user can read all app files regardless of host permissions
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 3000
+CMD ["node", "src/app.js"]

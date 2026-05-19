@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+# Run as non-root
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Install serve globally — used by the frontend Deployment in K8s
+RUN npm install -g serve@14
+
+WORKDIR /app
+
+COPY . .
+
+# Ensure the non-root user can read all app files regardless of host permissions
+RUN chown -R appuser:appgroup /app
+USER appuser
+
+EXPOSE 3000
+CMD ["serve", "-s", ".", "-l", "3000"]

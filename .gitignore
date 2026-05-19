@@ -1,8 +1,21 @@
-node_modules/
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+
+# Env
 .env
-global-bundle.pem
-secret.yaml
-configmap.yaml
-deployment.yaml
-ingress.yaml
-service.yaml
+*.pem
+*.key
+
+# Node
+node_modules/
+
+# Logs
+*.log

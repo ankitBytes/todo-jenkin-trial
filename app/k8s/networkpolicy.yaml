@@ -1,0 +1,56 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-ingress
+  namespace: todo
+spec:
+  podSelector:
+    matchLabels:
+      app: todo-app-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # ALB target-type: ip — the ALB ENIs (in VPC public subnets) hit pod IPs directly.
+  # 10.0.0.0/8 covers both dev (10.0.x.x) and prod (10.1.x.x) VPC CIDRs.
+  - from:
+    - ipBlock:
+        cidr: 10.0.0.0/8
+    - podSelector:
+        matchLabels:
+          app: todo-app-frontend
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - {}   # allow all egress — RDS and ElastiCache are outside the cluster
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-ingress
+  namespace: todo
+spec:
+  podSelector:
+    matchLabels:
+      app: todo-app-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # ALB ENIs (VPC subnets) deliver traffic directly to pod IPs with target-type: ip.
+  - from:
+    - ipBlock:
+        cidr: 10.0.0.0/8
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: todo-app-backend
+    ports:
+    - protocol: TCP
+      port: 3000

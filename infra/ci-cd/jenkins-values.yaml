@@ -1,0 +1,73 @@
+controller:
+  # Set password at install time:
+  #   --set controller.adminPassword=<your-password>
+  adminUser: "admin"
+
+  # Controller runs no builds — all jobs run on Kubernetes agent pods
+  numExecutors: 0
+
+  serviceType: ClusterIP
+
+  # Ingress via ALB (same cert as the app)
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+      alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7
+    hostName: jenkins.ankit.services
+
+  installPlugins:
+    - kubernetes:4372.v3d7dc9b_f3ea_5
+    - workflow-aggregator:600.vb_57cdd26fdd7
+    - git:5.7.0
+    - github:1.40.0
+    - amazon-ecr:1.114.vb_de7a_d1e1cb_e
+    - aws-credentials:231.v09e30bdd0016
+    - credentials-binding:687.v619cb_15e923f
+    - pipeline-stage-view:2.34
+
+serviceAccount:
+  create: true
+  name: jenkins
+  annotations:
+    # Replaced by terraform apply output — see jenkins-irsa.tf
+    eks.amazonaws.com/role-arn: arn:aws:iam::668076964228:role/todo-dev-jenkins-irsa-role
+
+persistence:
+  enabled: true
+  storageClass: gp2
+  size: 20Gi
+
+agent:
+  enabled: true
+  # Custom image built from app/docker/Dockerfile.jenkins-agent and pushed to ECR
+  image:
+    repository: 668076964228.dkr.ecr.us-east-1.amazonaws.com/jenkins-agent
+    tag: latest
+
+  # DOCKER_HOST points to the DinD sidecar running in the same pod
+  envVars:
+    - name: DOCKER_HOST
+      value: tcp://localhost:2375
+
+  # DinD sidecar — provides the Docker daemon for docker build/push
+  yamlTemplate: |
+    spec:
+      containers:
+      - name: dind
+        image: docker:24-dind
+        securityContext:
+          privileged: true
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        volumeMounts:
+        - name: docker-graph
+          mountPath: /var/lib/docker
+      volumes:
+      - name: docker-graph
+        emptyDir: {}

@@ -1,0 +1,22 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: todo-backend-pdb
+  namespace: todo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: todo-app-backend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: todo-frontend-pdb
+  namespace: todo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: todo-app-frontend
