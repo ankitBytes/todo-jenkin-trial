@@ -1,4 +1,4 @@
-# Todo Fullstack — Complete DevOps Documentation
+# Todo Fullstack — DevOps Documentation
 
 ## Table of Contents
 
@@ -7,19 +7,15 @@
 3. [Docker — Containerisation](#3-docker--containerisation)
 4. [Kubernetes — Container Orchestration](#4-kubernetes--container-orchestration)
 5. [Jenkins — CI/CD Pipeline](#5-jenkins--cicd-pipeline)
-6. [Troubleshooting — Problems Encountered & Solutions](#6-troubleshooting--problems-encountered--solutions)
+6. [Troubleshooting — What Went Wrong and How We Fixed It](#6-troubleshooting--what-went-wrong-and-how-we-fixed-it)
 
 ---
 
 # 1. Project Overview
 
-## Overview
+We built a full-stack Todo application and deployed it on AWS with a setup that's meant to survive real production traffic — automated infrastructure, containerised workloads, a proper CI/CD pipeline, and autoscaling at both the pod and node level.
 
-This project deploys a full-stack Todo application on AWS using a production-grade DevOps setup. The infrastructure is fully automated — from networking to container orchestration — using industry-standard tools.
-
-**Application:** A Todo web app with a JavaScript frontend, Node.js backend, MySQL database, and Redis cache.
-
-**Deployed at:** `https://www.ankit.services`
+The app itself is a JavaScript frontend talking to a Node.js backend, backed by MySQL for storage and Redis for caching. It's live at `https://www.ankit.services`.
 
 ---
 
@@ -60,12 +56,7 @@ This project deploys a full-stack Todo application on AWS using a production-gra
 
 ![Overall Architecture](diagrams/Overall%20Architecture-2026-05-19-085235.png)
 
-**Traffic Flow:**
-1. User visits `https://www.ankit.services`
-2. Route53 resolves DNS → ALB IP
-3. ALB terminates TLS, routes `/api/*` → Backend pods, `/` → Frontend pods
-4. Backend reads/writes to RDS (MySQL) and Redis (cache/sessions)
-5. Frontend is served as static files by the `serve` package
+When a user hits the URL, Route53 resolves the domain to the ALB's IP. The ALB terminates TLS using an ACM certificate, then routes the request based on the path — anything under `/api/` goes to the backend pods, everything else goes to the frontend. The backend handles database reads/writes against RDS and uses Redis to avoid hitting the database for every repeated request.
 
 ---
 
@@ -169,26 +160,16 @@ kubectl logs -n todo deployment/todo-frontend
 
 # 2. Terraform — Infrastructure as Code
 
-## What is Terraform?
+Rather than clicking through the AWS console and hoping we remember every step next time, we wrote the entire infrastructure as `.tf` files. Terraform compares what the code describes to what's actually running in AWS, and only changes what's different. Every resource is version-controlled, every change goes through a `plan` before it's applied, and spinning up a fresh environment is just one command.
 
-Terraform is a tool that lets you define your entire cloud infrastructure in code (`.tf` files). Instead of clicking through the AWS console to create resources, you describe what you want, and Terraform creates, updates, or deletes resources to match that description.
-
-**Why we use it:**
-- Every infrastructure resource is version-controlled in Git
-- Reproducible — run the same code, get the same infrastructure every time
-- Changes are reviewed before they are applied (`terraform plan`)
-- Supports multiple environments (dev, prod) from the same codebase
-
----
-
-## How Terraform Works
+The workflow is straightforward:
 
 ```
 Write .tf files  →  terraform plan  →  terraform apply  →  AWS Resources Created
      (code)          (preview)           (execute)
 ```
 
-Terraform keeps track of what it has created in a **state file** (`terraform.tfstate`). On every apply, it compares the current state with the desired state and only changes what is different.
+Terraform tracks everything it creates in a state file (`terraform.tfstate`). Lose the state file and you're in trouble — in production, store it remotely in S3 with a DynamoDB lock so multiple people can't apply simultaneously.
 
 ---
 
@@ -207,27 +188,17 @@ infra/terraform/
 └── modules/         ← Reusable building blocks
 ```
 
-Each module is a folder with three standard files:
-- `variables.tf` — inputs the module accepts
-- `main.tf` — resources the module creates
-- `outputs.tf` — values the module exposes to other modules
+Each module is a self-contained folder — `variables.tf` declares what it needs, `main.tf` creates the resources, and `outputs.tf` exposes values that other modules can reference. The root `main.tf` just wires them all together.
 
 ---
 
 ## Modules
 
-### 1. VPC (Virtual Private Cloud)
-**File:** `modules/vpc/main.tf`
+### 1. VPC — `modules/vpc/main.tf`
 
-**What it creates:**
-- 1 VPC (`10.0.0.0/16`) — an isolated network in AWS
-- 2 public subnets — for the ALB (internet-facing)
-- 2 private subnets — for EKS nodes, RDS, Redis (not reachable from internet)
-- 1 Internet Gateway — allows public subnets to reach the internet
-- 1 NAT Gateway — allows private subnet resources to reach the internet (for outbound, e.g., pulling Docker images)
-- Route tables connecting subnets to the gateways
+Everything lives inside a single VPC (`10.0.0.0/16`), but not everything gets the same level of exposure. We split the network into public and private subnets across two availability zones.
 
-**Why private subnets for nodes?** Security. Application pods run on nodes that are not directly reachable from the internet. All traffic must go through the ALB.
+The ALB sits in the public subnets — it needs to be reachable from the internet. Everything else (EKS nodes, RDS, Redis) is in private subnets. Pods can still reach the internet for outbound calls (pulling Docker images, calling AWS APIs) through a NAT Gateway, but nothing from the internet can reach them directly. All inbound traffic has to go through the ALB.
 
 ```
 Internet → Internet Gateway → Public Subnet (ALB)
@@ -241,10 +212,9 @@ Internet → Internet Gateway → Public Subnet (ALB)
 
 ---
 
-### 2. Security Groups
-**File:** `modules/security-groups/main.tf`
+### 2. Security Groups — `modules/security-groups/main.tf`
 
-Security groups are AWS firewalls at the resource level. Each resource only allows the traffic it needs.
+Security groups are the firewall rules that control what can talk to what. We follow a least-privilege approach — each resource only allows the traffic it genuinely needs.
 
 | Security Group | Inbound Allowed | Purpose |
 |----------------|----------------|---------|
@@ -253,28 +223,17 @@ Security groups are AWS firewalls at the resource level. Each resource only allo
 | `redis-sg` | Port 6379 from EKS node SG | Redis — only pods can connect |
 | `alb-sg` | Port 80 and 443 from internet (0.0.0.0/0) | ALB — accepts public traffic |
 
-**Key rule — `alb_to_nodes`:** An `aws_security_group_rule` that allows the ALB to send traffic to port 3000 on worker nodes. Without this, the ALB health checks fail and pods are never marked healthy.
+One rule that often gets missed is `alb_to_nodes` — an `aws_security_group_rule` that allows the ALB to reach port 3000 on the worker nodes. Without it, ALB health checks fail and no pods ever show as healthy, which took us a while to track down the first time.
 
 ---
 
-### 3. EKS (Elastic Kubernetes Service)
-**File:** `modules/eks/main.tf`
+### 3. EKS — `modules/eks/main.tf`
 
-**What it creates:**
-- EKS cluster (the Kubernetes control plane — managed by AWS)
-- OIDC provider (enables IRSA — pods assuming IAM roles)
-- IAM role for the cluster
-- IAM role for worker nodes
-- Launch template (defines EC2 config for nodes: IMDSv2 only, encrypted gp3 storage, custom SG)
-- Managed node group (the EC2 instances that run pods)
-- Kubernetes addons: `vpc-cni`, `kube-proxy`, `coredns`, `aws-ebs-csi-driver`
-- IRSA role for AWS Load Balancer Controller
-- IRSA role for EBS CSI Driver
-- Security group rules for control plane ↔ node communication
+This is the most complex module. We use EKS rather than self-managed Kubernetes because AWS manages the control plane for us — no etcd to babysit, no API server to upgrade manually.
 
-**Why managed node group?** AWS handles node provisioning, OS patching, and replacement on failure. We only define the instance type and scaling limits.
+The module provisions the EKS cluster itself, an OIDC provider (needed for IRSA), IAM roles for the cluster and worker nodes, a launch template that locks down the node config (IMDSv2 only, encrypted gp3 storage), a managed node group, and a few essential Kubernetes addons: `vpc-cni`, `kube-proxy`, `coredns`, and `aws-ebs-csi-driver`.
 
-**What is IRSA?** IAM Roles for Service Accounts. Pods can assume IAM roles without storing credentials. The OIDC provider links a Kubernetes service account to an AWS IAM role using a JWT token.
+We also create IRSA roles for the AWS Load Balancer Controller and the EBS CSI Driver. IRSA (IAM Roles for Service Accounts) is worth understanding — it lets pods assume IAM roles without any credentials being stored in the cluster. The flow looks like this:
 
 ```
 Pod (with service account annotation)
@@ -287,35 +246,31 @@ Pod (with service account annotation)
 
 ![IRSA Flow](diagrams/IRSA%20Flow-2026-05-19-085411.png)
 
-**Node group tags for Cluster Autoscaler:**
+The node group also gets two specific tags that the Cluster Autoscaler needs to discover which ASG to scale:
+
 ```hcl
 "k8s.io/cluster-autoscaler/enabled"              = "true"
 "k8s.io/cluster-autoscaler/todo-tf-cluster-dev"  = "owned"
 ```
-These tags let the Cluster Autoscaler discover which ASG to scale.
 
 ---
 
-### 4. ECR (Elastic Container Registry)
-**File:** `modules/ecr/main.tf`
+### 4. ECR — `modules/ecr/main.tf`
 
-**What it creates:** One private Docker image repository per service.
+We have two separate ECR repositories — one for the frontend, one for the backend. Keeping them separate means a backend code change only triggers a backend image build. If they shared a repo, you'd need tagging conventions like `frontend-v1`/`backend-v1` which are annoying to maintain.
 
 | Repository | Images stored |
 |-----------|--------------|
 | `todo-frontend` | Frontend static file server images |
 | `todo-backend` | Node.js API server images |
 
-**Why two repos?** Separate repos allow independent pipelines. A backend change only triggers a backend image build. A shared repo would require tagging conventions (e.g., `frontend-v1`, `backend-v1`) which are error-prone.
-
-**Lifecycle policy:** Automatically deletes old images, retaining only the latest N (configurable). Prevents storage costs from growing indefinitely.
+Each repo has a lifecycle policy that automatically expires old images, keeping only the most recent ones. Without this, registries quietly accumulate hundreds of stale images and storage costs creep up.
 
 ---
 
-### 5. RDS (Relational Database Service)
-**File:** `modules/rds/main.tf`
+### 5. RDS — `modules/rds/main.tf`
 
-**What it creates:** A managed MySQL 8.0 database instance.
+A managed MySQL 8.0 instance. The dev and prod configs differ significantly to keep dev costs low while prod stays resilient:
 
 | Setting | Dev | Prod |
 |---------|-----|------|
@@ -325,32 +280,19 @@ These tags let the Cluster Autoscaler discover which ASG to scale.
 | Deletion protection | No | Yes |
 | Final snapshot | Skipped | Taken |
 
-**Why managed RDS?** AWS handles: backups, point-in-time recovery, OS patches, minor version upgrades, and Multi-AZ failover. No DBA required.
-
-**Note:** `performance_insights_enabled = false` — Performance Insights is not supported on `db.t3.micro`. It is supported on `db.t3.small` and above.
+One gotcha we hit: Performance Insights isn't available on `db.t3.micro`. We had it enabled in the config and Terraform failed on apply. Had to set `performance_insights_enabled = false` for dev — it's fine on `db.t3.small` and above in prod.
 
 ---
 
-### 6. Redis (ElastiCache)
-**File:** `modules/redis/main.tf`
+### 6. Redis — `modules/redis/main.tf`
 
-**What it creates:** An ElastiCache replication group running Redis 7.1.
-
-Used by the backend for session storage and caching. Reduces repeated database queries.
+An ElastiCache replication group running Redis 7.1. The backend uses it for session storage and to cache database query results. Anything that would hit MySQL on every request and return the same data is a good Redis candidate.
 
 ---
 
-### 7. ALB (Application Load Balancer)
-**File:** `modules/alb/main.tf`
+### 7. ALB — `modules/alb/main.tf`
 
-**What it creates:**
-- Internet-facing ALB in public subnets
-- **Frontend target group** — `target_type = "ip"`, port 3000, health check path `/`
-- **Backend target group** — `target_type = "ip"`, port 3000, health check path `/health`
-- **HTTP listener (port 80)** — redirects all traffic to HTTPS (301)
-- **HTTPS listener (port 443)** — forwards to frontend by default; path rule `/api/*` and `/health` forwards to backend
-
-**Why `target_type = "ip"`?** The AWS Load Balancer Controller registers pod IPs directly into the target group (not EC2 instance IPs). This works because EKS uses the VPC CNI plugin which gives each pod a real VPC IP address.
+The load balancer handles all incoming traffic. It sits in the public subnets, terminates TLS using the ACM certificate, and routes requests based on path:
 
 ```
 ALB
@@ -363,14 +305,13 @@ ALB
 
 ![ALB Path Routing](diagrams/ALB%20Path%20Routing-2026-05-19-085341.png)
 
+We use `target_type = "ip"` on both target groups, which means the ALB registers pod IPs directly rather than EC2 instance IPs. This works because the VPC CNI plugin gives each pod its own real VPC IP — the ALB can hit pods without going through the node's IP at all.
+
 ---
 
-### 8. ASG (Auto Scaling Group Policy)
-**File:** `modules/asg/main.tf`
+### 8. ASG — `modules/asg/main.tf`
 
-EKS automatically creates an ASG for the managed node group. This module finds that ASG and adds a CPU target tracking scaling policy to it.
-
-**What it does:** If average CPU across all nodes exceeds 60%, AWS automatically adds more nodes. When CPU drops, nodes are removed (respecting `min_size`).
+EKS creates an Auto Scaling Group automatically when you create a managed node group. This module finds that ASG by its EKS tags and attaches a CPU-based scaling policy to it.
 
 ```hcl
 # Finds the EKS-created ASG by tags
@@ -380,28 +321,21 @@ data "aws_autoscaling_groups" "eks_nodes" {
 }
 ```
 
----
-
-### 9. Autoscaling (Cluster Autoscaler IRSA)
-**File:** `modules/autoscalling/main.tf`
-
-**What it creates:**
-- IAM policy with permissions to describe and modify ASGs
-- IRSA role that the Cluster Autoscaler pod assumes
-- Policy attachment
-
-**What is the Cluster Autoscaler?** A Kubernetes controller that watches for pods in `Pending` state (no nodes available) and increases the ASG desired count. It also removes underutilized nodes.
-
-The Helm chart is installed separately after the cluster is up (Terraform cannot configure the Helm provider before the EKS cluster exists).
+If average CPU across all nodes climbs above 60%, AWS adds another node. When things calm down, nodes are removed (but never below `min_size`). This is node-level scaling — separate from the pod-level HPA scaling we set up in Kubernetes.
 
 ---
 
-### 10. Route53
-**File:** `modules/route53/main.tf`
+### 9. Autoscaling (Cluster Autoscaler IRSA) — `modules/autoscalling/main.tf`
 
-**What it creates:** An A alias record pointing `www.ankit.services` to the ALB DNS name.
+While the ASG module adds a CPU policy to the node ASG, the Cluster Autoscaler is a Kubernetes controller that watches for pods stuck in `Pending` state because there's no node with enough capacity. When it sees that, it signals the ASG to add a node.
 
-An alias record is an AWS-specific extension that works like a CNAME but can be used at the zone apex and resolves faster.
+This module just creates the IAM plumbing the Cluster Autoscaler pod needs — an IAM policy with permissions to describe and modify ASGs, and an IRSA role that the pod assumes. The Helm chart itself is installed separately after the cluster is running, because Terraform can't configure the Helm provider until the cluster exists (a circular dependency we ran into — more on that in the troubleshooting section).
+
+---
+
+### 10. Route53 — `modules/route53/main.tf`
+
+An A alias record pointing `www.ankit.services` at the ALB. We use an alias record rather than a CNAME because alias records work at the zone apex and AWS resolves them faster internally.
 
 ```
 www.ankit.services  →  A alias  →  todo-alb-xxx.us-east-1.elb.amazonaws.com
@@ -409,64 +343,47 @@ www.ankit.services  →  A alias  →  todo-alb-xxx.us-east-1.elb.amazonaws.com
 
 ---
 
-### 11. S3
-**File:** `modules/s3/main.tf`
+### 11. S3 — `modules/s3/main.tf`
 
-A private S3 bucket for application assets. Configured with:
-- Server-side encryption (AES-256)
-- Versioning enabled
-- All public access blocked
-- Lifecycle rule to abort incomplete multipart uploads after 7 days
+A private S3 bucket for application assets — AES-256 encryption, versioning on, all public access blocked, and a lifecycle rule to clean up incomplete multipart uploads after 7 days. Nothing fancy, but it's all configured properly from the start rather than retrofitted later.
 
 ---
 
-### 12. CloudWatch
-**File:** `modules/cloudwatch/main.tf`
+### 12. CloudWatch — `modules/cloudwatch/main.tf`
 
-Pre-creates log groups so EKS starts shipping logs immediately:
+We pre-create log groups so EKS starts shipping logs the moment the cluster comes up, without waiting for CloudWatch to auto-create them:
+
 - `/aws/eks/<cluster-name>/cluster` — control plane logs
 - `/todo/dev/application` — application logs
 - `/todo/dev/backend` — backend logs
 - `/todo/dev/frontend` — frontend logs
 
+One thing to watch: if you enable EKS control plane logging, AWS creates the cluster log group automatically. If Terraform then tries to create it too, you'll get a `ResourceAlreadyExistsException`. The fix is `terraform import` — covered in the troubleshooting section.
+
 ---
 
-## Apply Procedure
+## Running Terraform
 
-### Prerequisites
 ```bash
-# Install tools
-terraform --version   # >= 1.6.0
-aws --version         # configured with appropriate IAM permissions
-
-# Set sensitive variables
+# Set the DB password as an environment variable (never hardcode it)
 export TF_VAR_rds_password="YourStrongPassword123"
-```
 
-### Commands
-
-```bash
 cd infra/terraform
 
-# First time only — downloads providers and initializes modules
+# First run only — downloads providers and modules
 terraform init
 
-# Preview changes before applying
+# Always plan first and review the diff
 terraform plan -var-file=environments/dev/terraform.tfvars
 
-# Apply changes
+# Apply when you're happy with the plan
 terraform apply -var-file=environments/dev/terraform.tfvars
 
-# View outputs (endpoints, ARNs)
+# See the output values (endpoint URLs, ARNs, etc.)
 terraform output
-
-# Destroy all resources (use with caution)
-terraform destroy -var-file=environments/dev/terraform.tfvars
 ```
 
-### State Management
-
-Terraform stores state in `terraform.tfstate`. In production this must be stored remotely (S3 + DynamoDB lock) using `backend.tf`:
+In production, remote state is essential. Add a `backend.tf`:
 
 ```hcl
 terraform {
@@ -479,9 +396,7 @@ terraform {
 }
 ```
 
-### Importing Existing Resources
-
-If a resource already exists in AWS but is not in Terraform state (e.g., from a failed/interrupted apply):
+If a resource already exists in AWS but isn't in Terraform state (usually from an interrupted apply), use `terraform import` to adopt it rather than deleting and recreating it:
 
 ```bash
 # Import an IAM role
@@ -495,7 +410,7 @@ terraform import -var-file=environments/dev/terraform.tfvars \
 
 ---
 
-## Environment Differences
+## Dev vs Prod
 
 | Variable | Dev | Prod |
 |----------|-----|------|
@@ -512,28 +427,20 @@ terraform import -var-file=environments/dev/terraform.tfvars \
 
 # 3. Docker — Containerisation
 
-## What is Docker?
-
-Docker packages an application and all its dependencies (runtime, libraries, config) into a single portable unit called a **container image**. The image runs identically on any machine — a developer's laptop, a CI server, or a Kubernetes node in AWS.
-
-**Why we use it:**
-- "Works on my machine" is eliminated — the container is the machine
-- Images are versioned and stored in ECR; any version can be rolled back to instantly
-- EKS pulls images directly from ECR to run pods
+Docker solves the "works on my machine" problem by packaging the application and everything it depends on into a single image that runs identically everywhere — a developer's laptop, a CI agent, or an EKS node. The image is built once, pushed to ECR, and that exact image is what runs in production.
 
 ---
 
-## Project Image Strategy
+## Two Separate Repositories
 
-| Image | Registry | Repository |
-|-------|---------|----------|
-| Frontend | ECR | `668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-frontend` |
-| Backend | ECR | `668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-backend` |
+We have one ECR repo per service:
 
-**Why two separate repositories?**
-- A backend code change should only trigger a backend image build — not rebuild the frontend
-- Independent versioning: frontend can be on `v2.1`, backend on `v3.0`
-- Avoids tag collision that occurs in a shared repo
+| Image | Repository |
+|-------|----------|
+| Frontend | `668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-frontend` |
+| Backend | `668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-backend` |
+
+Keeping them separate means a backend fix only triggers a backend build. With a shared repo you'd need tag prefixes like `frontend-v1`, `backend-v1` — which works until someone forgets the prefix and overwrites the wrong image.
 
 ---
 
@@ -565,16 +472,17 @@ EXPOSE 3000
 CMD ["node", "src/app.js"]
 ```
 
-**Key decisions:**
+A few intentional choices here worth explaining:
 
-| Decision | Reason |
-|----------|--------|
-| `node:20-alpine` | Alpine Linux is ~5MB vs ~150MB for full Debian — smaller image, faster pulls |
-| Non-root user | If a container is compromised, the attacker has no root privileges |
-| `COPY package*.json` before `COPY src/` | Docker caches each layer. If source changes but `package.json` doesn't, npm install is not re-run — faster builds |
-| `npm ci --omit=dev` | `ci` installs exactly what's in `package-lock.json` (reproducible). `--omit=dev` skips test frameworks, linters — smaller image |
+`node:20-alpine` keeps the base image small (~5MB vs ~150MB for full Debian). Smaller images mean faster ECR pulls and less attack surface.
 
-**Build context:** `app/backend/` — the Dockerfile expects `package.json` and `src/` at the root of the build context.
+The non-root user matters more than it sounds — if someone exploits a vulnerability in the app, they're dropped into a container with no root access rather than having the keys to the kingdom.
+
+The order of `COPY` instructions is deliberate. `package*.json` is copied and `npm ci` runs before the source code is copied. Docker caches each layer, so if you change a source file but not `package.json`, the install layer is reused from cache. Builds that used to take 2 minutes drop to 20 seconds.
+
+`npm ci --omit=dev` installs exactly what's in `package-lock.json` (no version surprises) and skips dev dependencies like test frameworks and linters that have no business being in a production image.
+
+**Build context:** `app/backend/` — the Dockerfile expects to find `package.json` and `src/` at the root of whatever directory you pass as the build context.
 
 ---
 
@@ -603,21 +511,13 @@ EXPOSE 3000
 CMD ["serve", "-s", ".", "-l", "3000"]
 ```
 
-**Key decisions:**
-
-| Decision | Reason |
-|----------|--------|
-| `serve` package | The frontend is pure HTML/JS/CSS — no build step needed. `serve` hosts the files on port 3000 |
-| `COPY . .` | All frontend files are copied. Build context is `app/frontend/` |
-| Port 3000 | Both frontend and backend use port 3000. The ALB routes to separate target groups by URL path — not port |
+The frontend is plain HTML/JS/CSS — no React, no build step. We use the `serve` package to host the static files on port 3000. Both services use port 3000; the ALB routes to them separately by path, not by port.
 
 ---
 
-## Build and Push Commands
+## Building and Pushing Images
 
-### Step 1 — Authenticate with ECR
-
-ECR uses short-lived tokens (12 hours). Run this once per session:
+ECR tokens expire after 12 hours, so you need to log in at the start of each session:
 
 ```bash
 aws ecr get-login-password --region us-east-1 \
@@ -625,27 +525,18 @@ aws ecr get-login-password --region us-east-1 \
     668076964228.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-### Step 2 — Build Backend Image
+Then build and push. Note the `-f` flag — the Dockerfiles live in `app/docker/` but the build context is the service directory:
 
 ```bash
+# Backend
 docker build \
   -t 668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-backend:latest \
   -f app/docker/Dockerfile.backend \
   app/backend/
-```
 
-- `-f` specifies the Dockerfile location (it is not in the build context directory)
-- Last argument `app/backend/` is the **build context** — the directory Docker sends to the daemon
-
-### Step 3 — Push Backend Image
-
-```bash
 docker push 668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-backend:latest
-```
 
-### Step 4 — Build and Push Frontend Image
-
-```bash
+# Frontend
 docker build \
   -t 668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-frontend:latest \
   -f app/docker/Dockerfile.frontend \
@@ -654,23 +545,17 @@ docker build \
 docker push 668076964228.dkr.ecr.us-east-1.amazonaws.com/todo-frontend:latest
 ```
 
----
-
-## Local Development
-
-For local testing without Kubernetes, use `docker-compose`:
+For local development without Kubernetes, `docker-compose` spins up the full stack locally:
 
 ```bash
 docker compose -f app/docker/docker-compose.yaml up
 ```
 
-This starts frontend, backend, MySQL, and Redis containers locally, wired together on a private Docker network. Useful for development before pushing to EKS.
-
 ---
 
-## Image Lifecycle in ECR
+## Image Lifecycle
 
-ECR retains the last **10 images** (dev: 5) per repository, controlled by the lifecycle policy Terraform creates:
+ECR keeps the last 10 tagged images per repo and deletes the rest automatically. Terraform creates this lifecycle policy:
 
 ```json
 {
@@ -687,40 +572,27 @@ ECR retains the last **10 images** (dev: 5) per repository, controlled by the li
 }
 ```
 
-Older images are automatically deleted. This keeps storage costs low and prevents the registry from accumulating hundreds of stale images.
-
----
-
-## Tagging Strategy
-
-Currently using `latest` tag for simplicity. In production, best practice is to tag with the Git commit SHA:
+We're currently tagging images as `latest`. For proper traceability in production you'd tag with the Git commit SHA so you can always trace a running image back to the exact commit that produced it:
 
 ```bash
 IMAGE_TAG=$(git rev-parse --short HEAD)
 docker build -t .../todo-backend:$IMAGE_TAG ...
 docker push .../todo-backend:$IMAGE_TAG
 
-# Also push as latest for convenience
+# Keep latest pointing at the newest build too
 docker tag .../todo-backend:$IMAGE_TAG .../todo-backend:latest
 docker push .../todo-backend:latest
 ```
-
-This makes every build traceable back to an exact commit.
 
 ---
 
 # 4. Kubernetes — Container Orchestration
 
-## What is Kubernetes?
-
-Kubernetes (K8s) is a system that manages containers at scale. Instead of manually running `docker run` on servers, you declare what you want (e.g., "run 2 copies of the backend container") and Kubernetes continuously ensures that state is maintained — restarting crashed containers, rescheduling on healthy nodes, and scaling up/down.
-
-**Why we use EKS (Elastic Kubernetes Service)?**
-AWS manages the Kubernetes control plane (the master nodes). We only manage the worker nodes where our pods run. This eliminates the operational burden of running etcd, the API server, and scheduler ourselves.
+Kubernetes removes the burden of manually deciding which server runs which container. You tell it what you want — "keep two copies of the backend running" — and it figures out placement, restarts failures, and redistributes load when nodes go down. We run it on EKS so AWS manages the control plane (etcd, API server, scheduler) and we just deal with the worker nodes.
 
 ---
 
-## Cluster Overview
+## What's Running in the Cluster
 
 ```
 EKS Cluster (todo-tf-cluster-dev)
@@ -745,11 +617,13 @@ EKS Cluster (todo-tf-cluster-dev)
 
 ![EKS Namespace Structure](diagrams/EKS%20Namespace%20Structure-2026-05-19-085451.png)
 
+The application resources all live in the `todo` namespace to keep them separate from the cluster system components in `kube-system`. Namespaces also let you apply resource quotas and access controls per team or per environment.
+
 ---
 
-## Manifests Explained
+## Manifest Walkthrough
 
-### 1. Namespace — `namespace.yaml`
+### Namespace — `namespace.yaml`
 
 ```yaml
 apiVersion: v1
@@ -758,13 +632,11 @@ metadata:
   name: todo
 ```
 
-**What it does:** Creates an isolated workspace called `todo`. All application resources live here.
-
-**Why:** Namespaces prevent resource name collisions and allow per-namespace access control and resource quotas. The `kube-system` namespace is for cluster components — keeping our app in `todo` separates concerns clearly.
+Simple — just creates the `todo` workspace. Everything the application needs lives in here.
 
 ---
 
-### 2. ConfigMap — `configmap.yaml`
+### ConfigMap — `configmap.yaml`
 
 ```yaml
 apiVersion: v1
@@ -778,15 +650,13 @@ data:
   ALLOWED_ORIGIN: "https://www.ankit.services"
 ```
 
-**What it does:** Stores non-sensitive configuration as key-value pairs, injected into pods as environment variables.
+Non-sensitive config is stored here and injected into pods as environment variables. The benefit is that if you need to change `ALLOWED_ORIGIN` — say you're adding a new domain — you update the ConfigMap and restart the deployment. No image rebuild, no CI pipeline run.
 
-**Why separate from the image?** Configuration changes (e.g., updating `ALLOWED_ORIGIN`) don't require rebuilding the Docker image — just update the ConfigMap and roll the deployment.
-
-**Rule:** ConfigMap = safe to commit to Git. Secret = never commit plain text.
+ConfigMaps are safe to commit to Git. Secrets (next section) are not.
 
 ---
 
-### 3. Secret — `secret.yaml`
+### Secret — `secret.yaml`
 
 ```yaml
 apiVersion: v1
@@ -804,13 +674,12 @@ data:
   REDIS_PORT:  <base64 encoded>
 ```
 
-**What it does:** Stores sensitive values. Kubernetes stores them separately from regular config and only mounts them in pods that need them.
+Database credentials and Redis endpoints go here. Worth calling out: base64 is just encoding, not encryption. Anyone who can run `kubectl get secret` and has the right RBAC permissions can decode the values. For a hardened production setup, you'd use AWS Secrets Manager with the External Secrets Operator to inject secrets at pod startup instead of storing them in Kubernetes at all.
 
-**Important:** Base64 is encoding, not encryption. The values can be decoded with `base64 -d`. For production, use AWS Secrets Manager with the External Secrets Operator to inject secrets at runtime.
+To get the right values for this file after Terraform runs:
 
-**How to generate values:**
 ```bash
-# RDS endpoint (remove the :3306 port suffix)
+# RDS endpoint (strip the :3306 port suffix first)
 terraform output -raw rds_endpoint | cut -d: -f1 | base64
 
 # Redis endpoint
@@ -822,11 +691,11 @@ echo -n "YourPassword" | base64
 
 ---
 
-### 4. Deployment — `deployment.yaml`
+### Deployment — `deployment.yaml`
 
-The most important manifest. Defines how pods are created and managed.
+This is the most important manifest. It tells Kubernetes what image to run, how many replicas to keep alive, and where to pull config from.
 
-**Frontend Deployment:**
+**Frontend:**
 ```yaml
 spec:
   replicas: 2
@@ -845,7 +714,7 @@ spec:
             name: todo-config
 ```
 
-**Backend Deployment:** Same structure but also mounts the Secret:
+**Backend** — same structure, but also mounts the Secret for database credentials:
 ```yaml
         envFrom:
         - configMapRef:
@@ -854,21 +723,13 @@ spec:
             name: todo-secret
 ```
 
-**Key settings:**
+Two replicas means if one pod crashes or a node goes down, the other keeps serving traffic while Kubernetes reschedules the missing pod. `envFrom` injects all keys from the ConfigMap (and Secret, for the backend) as environment variables — the app code just reads them with `process.env.DB_HOST` and doesn't need to know anything about Kubernetes.
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| `replicas: 2` | 2 pods each | High availability — if one pod crashes, the other handles traffic |
-| `envFrom configMapRef` | Injects all ConfigMap keys as env vars | Decouples config from image |
-| `envFrom secretRef` | Injects all Secret keys as env vars | Keeps credentials out of the image |
-
-**Liveness vs Readiness Probes** (if configured):
-- **Liveness:** If this fails, Kubernetes restarts the container
-- **Readiness:** If this fails, Kubernetes stops sending traffic to this pod (but doesn't restart it)
+A note on probes: if you add liveness and readiness probes (we'd recommend it for production), the distinction matters — a failing liveness probe causes a container restart, while a failing readiness probe just pulls the pod from the load balancer rotation without restarting it.
 
 ---
 
-### 5. Service — `service.yaml`
+### Service — `service.yaml`
 
 ```yaml
 apiVersion: v1
@@ -885,15 +746,13 @@ spec:
     targetPort: 3000
 ```
 
-**What it does:** Creates a stable internal IP and DNS name for a group of pods. `todo-frontend-svc.todo.svc.cluster.local` always resolves to one of the running frontend pods.
+A Service gives a stable internal hostname to a group of pods. `todo-frontend-svc.todo.svc.cluster.local` always resolves to one of the running frontend pods, even as pods restart and get new IPs. Without it, you'd have to track pod IPs manually, which change every time a pod restarts.
 
-**Why ClusterIP (not LoadBalancer)?** The ALB is our external entry point, managed by the Ingress. We don't need a separate AWS load balancer per service. ClusterIP is internal-only — cheaper and simpler.
-
-**Port mapping:** The Service listens on port 80 internally but forwards to port 3000 on the pods (where the app runs).
+We use `ClusterIP` (internal only) rather than `LoadBalancer` because the ALB is our external entry point. Creating a `LoadBalancer` service would spin up an additional AWS load balancer per service — expensive and unnecessary when the Ingress already handles external routing. The Service maps port 80 internally to port 3000 on the pods.
 
 ---
 
-### 6. Ingress — `ingress.yaml`
+### Ingress — `ingress.yaml`
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -936,19 +795,8 @@ spec:
               number: 80
 ```
 
-**What it does:** The AWS Load Balancer Controller reads this resource and configures the ALB's listener rules accordingly.
+The AWS Load Balancer Controller watches for Ingress resources and translates them into ALB listener rules. The annotations tell it how to configure the ALB — internet-facing, direct pod IP targeting, HTTPS with the ACM cert, HTTP-to-HTTPS redirect, and which existing ALB to attach to (so it doesn't create a second one).
 
-**Key annotations:**
-
-| Annotation | Value | Purpose |
-|-----------|-------|---------|
-| `scheme: internet-facing` | — | ALB is reachable from the internet |
-| `target-type: ip` | — | ALB registers pod IPs directly (not EC2 IPs) |
-| `certificate-arn` | ACM ARN | TLS certificate for HTTPS |
-| `ssl-redirect: 443` | — | HTTP requests are redirected to HTTPS |
-| `load-balancer-arn` | existing ALB ARN | Tells controller to use this existing ALB instead of creating a new one |
-
-**Path routing:**
 ```
 https://www.ankit.services/api/todos  → todo-backend-svc → backend pods
 https://www.ankit.services/health     → todo-backend-svc → backend pods
@@ -957,7 +805,7 @@ https://www.ankit.services/           → todo-frontend-svc → frontend pods
 
 ---
 
-### 7. HPA (HorizontalPodAutoscaler) — `hpa.yaml`
+### HPA — `hpa.yaml`
 
 ```yaml
 apiVersion: autoscaling/v2
@@ -981,21 +829,15 @@ spec:
         averageUtilization: 70
 ```
 
-**What it does:** Automatically increases/decreases the number of backend pods based on CPU usage.
+When backend CPU stays above 70%, the HPA adds pods (up to 6). When it drops back down, pods are removed until we're back at the minimum of 2. This handles traffic spikes without over-provisioning all the time.
 
-**How it works:**
-```
-CPU > 70% for sustained period → HPA adds pods (up to maxReplicas: 6)
-CPU < 70% and stable          → HPA removes pods (down to minReplicas: 2)
-```
-
-**Two levels of autoscaling:**
-1. **HPA** (this) — scales pods within a node
-2. **Cluster Autoscaler** — adds/removes nodes when pods can't be scheduled
+There are two levels of autoscaling working together:
+- **HPA** scales pods within the existing nodes
+- **Cluster Autoscaler** adds nodes when there are no nodes with enough capacity to schedule new pods
 
 ---
 
-### 8. PDB (PodDisruptionBudget) — `pdb.yaml`
+### PDB — `pdb.yaml`
 
 ```yaml
 apiVersion: policy/v1
@@ -1010,13 +852,11 @@ spec:
       app: todo-app-backend
 ```
 
-**What it does:** Guarantees that at least 1 backend pod is always running during voluntary disruptions (node drains, upgrades).
-
-**Why it matters:** Without a PDB, Kubernetes could drain a node and temporarily leave zero backend pods running. With `minAvailable: 1`, Kubernetes waits until a replacement pod is running before draining the next one.
+Without a PDB, Kubernetes could drain two nodes at once during an upgrade and briefly leave zero backend pods running. With `minAvailable: 1`, it has to keep at least one pod running at all times during voluntary disruptions. It's a small thing that prevents embarrassing outages during routine maintenance.
 
 ---
 
-## Traffic Flow — Complete Picture
+## Traffic Flow — Request to Response
 
 ```
 User request: GET https://www.ankit.services/api/todos
@@ -1036,7 +876,7 @@ User request: GET https://www.ankit.services/api/todos
 
 ---
 
-## Useful Commands
+## Day-to-Day Commands
 
 ```bash
 # Set namespace shortcut
@@ -1069,30 +909,23 @@ kubectl rollout status deployment/todo-backend -n todo
 kubectl get events -n todo --sort-by='.lastTimestamp'
 ```
 
----
-
 ## Updating the Application
 
-### New image (code change):
+**New code (requires image rebuild):**
 ```bash
-# Build and push new image
 docker build -t .../todo-backend:latest -f app/docker/Dockerfile.backend app/backend/
 docker push .../todo-backend:latest
-
-# Restart the deployment to pull the new image
 kubectl rollout restart deployment/todo-backend -n todo
 ```
 
-### Config change (no rebuild needed):
+**Config change (no rebuild needed):**
 ```bash
-# Edit configmap.yaml, then:
 kubectl apply -f app/k8s/configmap.yaml
 kubectl rollout restart deployment/todo-backend -n todo
 ```
 
-### Secret change:
+**Secret change (updated base64 values):**
 ```bash
-# Edit secret.yaml with new base64 values, then:
 kubectl apply -f app/k8s/secret.yaml
 kubectl rollout restart deployment/todo-backend -n todo
 ```
@@ -1101,31 +934,15 @@ kubectl rollout restart deployment/todo-backend -n todo
 
 # 5. Jenkins — CI/CD Pipeline
 
-## What is Jenkins?
+Jenkins is our automation server. When code hits the main branch, Jenkins picks it up, builds the Docker image, pushes it to ECR, deploys it to EKS, and watches the rollout. If anything goes wrong, it rolls back automatically and marks the build failed.
 
-Jenkins is an open-source automation server. When code is pushed to Git, Jenkins automatically builds Docker images, pushes them to ECR, and rolls out the new version to EKS — all without manual steps.
+We chose Jenkins over GitHub Actions mainly because it's self-hosted — no per-minute billing, and it works with whatever Git server you're running. The pipeline is defined in a `Jenkinsfile` that lives in the repo alongside the code, so pipeline changes go through the same review process as everything else.
 
-**Why Jenkins (not GitHub Actions)?**
-- Self-hosted: runs inside your own infrastructure, no per-minute billing
-- Works with any Git server (GitHub, GitLab, Bitbucket, self-hosted)
-- Mature plugin ecosystem — AWS credentials, Kubernetes, Docker all have first-class support
-- Pipeline-as-code: the Jenkinsfile is version-controlled alongside the application
-
----
-
-## Pipeline File Location
-
-```
-infra/ci-cd/Jenkinsfile
-```
-
-The Jenkinsfile is the single source of truth for the CI/CD process. Jenkins reads it from the repo on every run.
+The Jenkinsfile lives at `infra/ci-cd/Jenkinsfile`.
 
 ---
 
 ## Environment Variables
-
-Defined once at the top, used throughout all stages:
 
 ```groovy
 environment {
@@ -1140,7 +957,7 @@ environment {
 }
 ```
 
-**`IMAGE_TAG = "v${BUILD_NUMBER}"`** — Jenkins auto-increments `BUILD_NUMBER` on every run. This means every build produces a unique, traceable image tag. The image is also tagged `latest` for convenience.
+`BUILD_NUMBER` is automatically incremented by Jenkins on every run, so every build gets a unique `IMAGE_TAG`. The image is also tagged `latest` for convenience, but the versioned tag (`v43`) is what gets deployed so it's traceable.
 
 ---
 
@@ -1168,33 +985,19 @@ Cleanup
 
 ---
 
-## Stage-by-Stage Breakdown
+## How Each Stage Works
 
-### Stage 1 — Checkout
+**Checkout** just clones the repo at the triggering commit. Simple.
 
-```groovy
-stage('Checkout') {
-    steps { checkout scm }
-}
-```
+**App stages** run the frontend and backend pipelines in parallel — if both changed, they build simultaneously rather than waiting for each other.
 
-Clones the repository at the commit that triggered the pipeline. `scm` refers to the source control configuration set in the Jenkins job.
-
----
-
-### Stage 2 — App (Parallel)
-
-The frontend and backend pipelines run simultaneously. This halves the total build time when both change.
-
-#### Changeset Guards (`when { changeset '...' }`)
-
-Every sub-stage is wrapped in a `when` condition:
+Every sub-stage is wrapped in a changeset guard:
 
 ```groovy
 when { changeset 'app/frontend/**' }
 ```
 
-**Why this matters:** If you push a change to only the backend (`app/backend/`), Jenkins skips all three frontend stages entirely — no unnecessary image rebuild, no unnecessary deployment.
+This is what makes the pipeline smart. If you push a backend fix, Jenkins skips all three frontend stages without even looking at them — no unnecessary rebuild, no unnecessary push, no unnecessary deployment.
 
 | Push changes to... | Frontend stages | Backend stages | Terraform stages |
 |--------------------|----------------|----------------|-----------------|
@@ -1203,68 +1006,49 @@ when { changeset 'app/frontend/**' }
 | `infra/` | Skip | Skip | Run |
 | `app/frontend/` + `app/backend/` | Run | Run | Skip |
 
-#### Build Frontend
+**Build** runs `docker build` with the `-f` flag to point at the Dockerfile (which is in `app/docker/`, not in the build context directory):
 
 ```groovy
 sh """
     docker build \
-        -f app/docker/Dockerfile.frontend \
-        -t ${ECR_FRONTEND}:${IMAGE_TAG} \
-        app/frontend/
+        -f app/docker/Dockerfile.backend \
+        -t ${ECR_BACKEND}:${IMAGE_TAG} \
+        app/backend/
 """
 ```
 
-- `-f app/docker/Dockerfile.frontend` — Dockerfile is not in the build context directory; `-f` points to it explicitly
-- `-t ...frontend:v42` — tags with the build number
-- `app/frontend/` — build context (everything Docker can access during build)
-
-#### Push Frontend
+**Push** logs into ECR fresh (tokens expire after 12 hours) and pushes both the versioned tag and `latest`:
 
 ```groovy
 sh """
     aws ecr get-login-password --region ${AWS_REGION} | \
         docker login --username AWS --password-stdin ${ECR_REGISTRY}
-    docker push ${ECR_FRONTEND}:${IMAGE_TAG}
-    docker tag  ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
-    docker push ${ECR_FRONTEND}:latest
+    docker push ${ECR_BACKEND}:${IMAGE_TAG}
+    docker tag  ${ECR_BACKEND}:${IMAGE_TAG} ${ECR_BACKEND}:latest
+    docker push ${ECR_BACKEND}:latest
 """
 ```
 
-ECR tokens expire after 12 hours, so the pipeline logs in fresh every run. The image is pushed twice: once with the versioned tag (`v42`) and once as `latest`.
-
-#### Deploy Frontend
+**Deploy** updates the running deployment and watches the rollout:
 
 ```groovy
 sh """
     aws eks update-kubeconfig \
         --region ${AWS_REGION} --name ${EKS_CLUSTER}
-    kubectl set image deployment/todo-frontend \
-        todo-frontend=${ECR_FRONTEND}:${IMAGE_TAG} \
+    kubectl set image deployment/todo-backend \
+        todo-backend=${ECR_BACKEND}:${IMAGE_TAG} \
         -n ${KUBE_NS}
-    kubectl rollout status deployment/todo-frontend \
+    kubectl rollout status deployment/todo-backend \
         -n ${KUBE_NS} --timeout=180s \
-    || (kubectl rollout undo deployment/todo-frontend -n ${KUBE_NS} && exit 1)
+    || (kubectl rollout undo deployment/todo-backend -n ${KUBE_NS} && exit 1)
 """
 ```
 
-**How the rollout works:**
+`kubectl set image` patches the deployment to use the new tag. Kubernetes starts a rolling update. `kubectl rollout status` waits up to 3 minutes. If the rollout doesn't complete — maybe the new image crashes, maybe health checks fail — the `||` clause fires: it rolls back to the previous version and exits with a failure code, which marks the Jenkins build red.
 
-1. `aws eks update-kubeconfig` — configures `kubectl` to talk to the EKS cluster using IAM credentials
-2. `kubectl set image` — patches the deployment to use the new image tag; Kubernetes starts a rolling update
-3. `kubectl rollout status --timeout=180s` — waits up to 3 minutes for the rollout to complete
-4. `|| (kubectl rollout undo ... && exit 1)` — if the rollout fails or times out, Jenkins immediately rolls back to the previous working image and marks the build failed
+No one needs to manually intervene to get the old version back. It just happens.
 
-This is an **automatic rollback** — no manual intervention needed if the new image crashes or fails health checks.
-
-**Backend stages are identical** — same build, push, deploy pattern with `app/backend/**` changeset guard and `todo-backend` deployment name.
-
----
-
-### Stages 3–6 — Terraform (Infrastructure)
-
-These stages only run when files under `infra/` change.
-
-#### Terraform Init
+**Terraform stages** (only when `infra/` changes) run init → validate → plan → apply. Credentials come from a Jenkins credential store entry called `aws-creds`, injected via `withCredentials` so they're never visible in logs:
 
 ```groovy
 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
@@ -1273,37 +1057,7 @@ withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
 }
 ```
 
-Downloads providers and modules. `withCredentials` injects `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the Jenkins credential store — credentials are never hardcoded.
-
-#### Terraform Validate
-
-```groovy
-sh "terraform -chdir=${TF_DIR} validate"
-```
-
-Validates HCL syntax and internal consistency without connecting to AWS. Fast — runs in seconds.
-
-#### Terraform Plan
-
-```groovy
-sh """
-    terraform -chdir=${TF_DIR} plan \
-        -var-file=environments/dev/terraform.tfvars \
-        -out=tfplan -input=false
-"""
-```
-
-Computes the diff between current state and desired state. Saves the plan to `tfplan` so Apply executes exactly what was planned.
-
-#### Terraform Apply
-
-```groovy
-sh "terraform -chdir=${TF_DIR} apply -input=false tfplan"
-```
-
-Executes the saved plan. Because the plan is pre-approved, this runs non-interactively.
-
-**Note:** In production pipelines, you would add a manual approval gate between Plan and Apply:
+For production, you'd put a manual approval between plan and apply:
 
 ```groovy
 stage('Approve Terraform Apply') {
@@ -1313,9 +1067,7 @@ stage('Approve Terraform Apply') {
 }
 ```
 
----
-
-### Stage 7 — Cleanup
+**Cleanup** removes the locally built images from the Jenkins agent and deletes the saved plan file. The `|| true` stops the stage from failing if an image was never built (e.g., a frontend-only change means no backend image exists to clean up):
 
 ```groovy
 sh """
@@ -1325,63 +1077,9 @@ sh """
 """
 ```
 
-Removes locally built images from the Jenkins agent and deletes the saved Terraform plan. The `|| true` prevents the stage from failing if an image was never built (e.g., frontend-only change means backend image doesn't exist).
-
 ---
 
-## Post Section
-
-```groovy
-post {
-    success { echo "Pipeline ${IMAGE_TAG} completed successfully." }
-    failure { echo 'Pipeline failed — check stage logs above.' }
-}
-```
-
-Runs after all stages complete regardless of outcome. In production, replace `echo` with Slack or email notifications:
-
-```groovy
-post {
-    failure {
-        slackSend channel: '#alerts', message: "Build ${IMAGE_TAG} FAILED: ${env.BUILD_URL}"
-    }
-}
-```
-
----
-
-## Jenkins Setup Requirements
-
-### 1. Jenkins Credentials
-
-The pipeline requires one credential stored in Jenkins (Manage Jenkins → Credentials):
-
-| ID | Type | Contents |
-|----|------|---------|
-| `aws-creds` | AWS Credentials | IAM access key + secret key |
-
-The IAM user/role needs permissions for: ECR (push/pull), EKS (update-kubeconfig, kubectl), and Terraform (full AWS access or scoped to the resources it manages).
-
-### 2. Required Plugins
-
-| Plugin | Purpose |
-|--------|---------|
-| Pipeline | Jenkinsfile support |
-| Git | Source checkout |
-| AWS Credentials | `AmazonWebServicesCredentialsBinding` |
-| Docker Pipeline | `docker build/push` in pipeline steps |
-
-### 3. Jenkins Agent Requirements
-
-The agent (the machine that runs build steps) must have these tools installed:
-- `docker` (with daemon running)
-- `aws` CLI (v2)
-- `kubectl`
-- `terraform` (>= 1.6.0)
-
----
-
-## End-to-End Flow — Code Change to Production
+## End-to-End: What Happens When You Push
 
 ```
 Developer pushes to main branch
@@ -1415,31 +1113,31 @@ post { success } or post { failure }
 
 ![End-to-End CI/CD Flow](diagrams/End-to-End%20CICD%20Flow-2026-05-19-085645.png)
 
-**Total time for a backend-only change:** ~3-5 minutes (build + push + rolling rollout)
+A backend-only change takes roughly 3-5 minutes from push to running in production.
 
 ---
 
-## Image Tagging Strategy
+## Jenkins Agent Requirements
 
-```
-v43 (build number)  ←  traceability: maps to a specific Jenkins build and Git commit
-latest              ←  convenience: always points to the most recently deployed image
-```
+The machine running the pipeline needs:
+- Docker (with the daemon running)
+- AWS CLI v2
+- `kubectl`
+- Terraform >= 1.6.0
 
-**Best practice improvement:** Also tag with the Git commit SHA for full traceability:
+And one credential in Jenkins (Manage Jenkins → Credentials):
 
-```groovy
-environment {
-    GIT_SHA  = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-    IMAGE_TAG = "v${BUILD_NUMBER}-${GIT_SHA}"  // e.g. v43-a3f2c1d
-}
-```
+| ID | Type | Contents |
+|----|------|---------|
+| `aws-creds` | AWS Credentials | IAM access key + secret key |
+
+Required plugins: Pipeline, Git, AWS Credentials, Docker Pipeline.
 
 ---
 
-## Rolling Update Behaviour
+## Rolling Updates
 
-When `kubectl set image` is called, Kubernetes performs a rolling update:
+When `kubectl set image` fires, Kubernetes doesn't stop the old pods immediately — it spins up new ones first:
 
 ```
 Before: [Pod v42] [Pod v42]
@@ -1453,46 +1151,19 @@ After:  [Pod v43] [Pod v43]
 
 ![Kubernetes Rolling Update](diagrams/Kubernetes%20Rolling%20Update-2026-05-19-085612.png)
 
-- Zero downtime: old pods serve traffic until new pods pass health checks
-- If the new pod never becomes Ready, the rollout stalls and times out
-- The `|| rollout undo` in the Jenkinsfile catches this and restores v42
+Old pods keep serving traffic until the new pod passes its readiness check. If the new pod never becomes ready, the rollout stalls, Jenkins times out, and `rollout undo` restores v42. Zero-downtime deployments by default.
 
-This rollout behaviour is controlled by the deployment's `strategy.rollingUpdate` settings (default: `maxUnavailable: 25%`, `maxSurge: 25%`).
+The rollout behaviour is controlled by `strategy.rollingUpdate` in the deployment (default: `maxUnavailable: 25%`, `maxSurge: 25%`).
 
 ---
 
-# 6. Troubleshooting — Problems Encountered & Solutions
+# 6. Troubleshooting — What Went Wrong and How We Fixed It
 
-This section records every significant problem hit during the initial deployment of this project. Each entry includes the exact error, the root cause, and the steps taken to fix it.
-
----
-
-## Problem Index
-
-1. [Terraform `localss` typo in ALB module](#problem-1-terraform-localss-typo-in-alb-module)
-2. [ALB module — wrong security group and subnet attribute names](#problem-2-alb-module--wrong-security-group-and-subnet-attribute-names)
-3. [ALB module — `redirects` block instead of `redirect`](#problem-3-alb-module--redirects-block-instead-of-redirect)
-4. [ASG module — `autoscalling` typos throughout](#problem-4-asg-module--autoscalling-typos-throughout)
-5. [ASG module — `filters = [...]` syntax rejected](#problem-5-asg-module--filters--syntax-rejected)
-6. [Security groups — `ip_protocol` and non-list `cidr_blocks`](#problem-6-security-groups--ip_protocol-and-non-list-cidr_blocks)
-7. [Security group — `aws_security_group` used instead of `aws_security_group_rule`](#problem-7-security-group--aws_security_group-used-instead-of-aws_security_group_rule)
-8. [EKS module — dangling `tags {}` block outside any resource](#problem-8-eks-module--dangling-tags--block-outside-any-resource)
-9. [S3 lifecycle rule — missing `filter {}` block](#problem-9-s3-lifecycle-rule--missing-filter--block)
-10. [Non-ASCII em-dashes in security group descriptions rejected by AWS](#problem-10-non-ascii-em-dashes-in-security-group-descriptions-rejected-by-aws)
-11. [RDS — Performance Insights not supported on db.t3.micro](#problem-11-rds--performance-insights-not-supported-on-dbt3micro)
-12. [Route53 — `count` depends on unknown value during plan](#problem-12-route53--count-depends-on-unknown-value-during-plan)
-13. [Helm provider chicken-and-egg with EKS](#problem-13-helm-provider-chicken-and-egg-with-eks)
-14. [CloudWatch log groups already existed in AWS](#problem-14-cloudwatch-log-groups-already-existed-in-aws)
-15. [IAM roles and policies already existed in AWS](#problem-15-iam-roles-and-policies-already-existed-in-aws)
-16. [Route53 CNAME record conflicted with new A alias record](#problem-16-route53-cname-record-conflicted-with-new-a-alias-record)
-17. [ALB controller CrashLoopBackOff — missing VPC ID and region](#problem-17-alb-controller-crashloopbackoff--missing-vpc-id-and-region)
-18. [Webhook `context deadline exceeded` — wrong node security group](#problem-18-webhook-context-deadline-exceeded--wrong-node-security-group)
-19. [ALB controller `AccessDenied: DescribeListenerAttributes`](#problem-19-alb-controller-accessdenied-describelistenerattributes)
-20. [Backend pods crashing — wrong DB_HOST and DB_PASSWORD in Secret](#problem-20-backend-pods-crashing--wrong-db_host-and-db_password-in-secret)
+This is the honest account of every non-trivial problem we hit during the initial deployment. None of these are hypothetical edge cases — each one is something that actually blocked us, sometimes for hours. Hopefully this saves someone else the same debugging time.
 
 ---
 
-## Problem 1: Terraform `localss` typo in ALB module
+## Problem 1: `localss` typo in the ALB module
 
 **Error:**
 ```
@@ -1501,9 +1172,8 @@ Error: Unsupported block type
   localss {
 ```
 
-**Root cause:** `locals` was misspelled as `localss`. Additionally, references throughout the file used `${locals.name}` instead of the correct `${local.name}` (the block is `locals {}` but the reference keyword is `local.`).
+`locals` was misspelled as `localss`. On top of that, references throughout the file used `${locals.name}` instead of `${local.name}` — the block is declared as `locals {}` but referenced as `local.`.
 
-**Fix:**
 ```hcl
 # Wrong
 localss {
@@ -1524,7 +1194,7 @@ resource "..." {
 
 ---
 
-## Problem 2: ALB module — wrong security group and subnet attribute names
+## Problem 2: Wrong attribute names on `aws_lb`
 
 **Error:**
 ```
@@ -1534,9 +1204,8 @@ Error: Unsupported argument
   "subnet": argument not supported here
 ```
 
-**Root cause:** The `aws_lb` resource uses `security_groups` (a list) and `subnets` (a list), not singular forms.
+`aws_lb` takes `security_groups` (a list) and `subnets` (a list), not the singular versions.
 
-**Fix:**
 ```hcl
 # Wrong
 resource "aws_lb" "main" {
@@ -1553,7 +1222,7 @@ resource "aws_lb" "main" {
 
 ---
 
-## Problem 3: ALB module — `redirects` block instead of `redirect`
+## Problem 3: `redirects {}` instead of `redirect {}`
 
 **Error:**
 ```
@@ -1562,9 +1231,8 @@ Error: Unsupported block type
   redirects {
 ```
 
-**Root cause:** The action block for HTTP→HTTPS redirect uses `redirect {}` (singular), not `redirects {}`.
+The HTTP→HTTPS redirect action block is `redirect {}`, not `redirects {}`.
 
-**Fix:**
 ```hcl
 # Wrong
 action {
@@ -1589,7 +1257,7 @@ action {
 
 ---
 
-## Problem 4: ASG module — `autoscalling` typos throughout
+## Problem 4: `autoscalling` typos throughout the ASG module
 
 **Error:**
 ```
@@ -1598,20 +1266,18 @@ Error: Invalid resource type
   resource "aws_autoscalling_policy" "cpu"
 ```
 
-**Root cause:** The module was written with `autoscalling` (double-l) throughout. The correct AWS provider resource names use `autoscaling` (single-l).
-
-**Affected resources:**
+The module had `autoscalling` (double-l) everywhere it should be `autoscaling`. The full list of things to fix:
 - `aws_autoscalling_groups` → `aws_autoscaling_groups`
 - `aws_autoscalling_policy` → `aws_autoscaling_policy`
-- `predefined_metric_type = "ASGAverageCPUAutoscallization"` → `"ASGAverageCPUUtilization"`
+- `"ASGAverageCPUAutoscallization"` → `"ASGAverageCPUUtilization"`
 - `predefied_metric_specification` → `predefined_metric_specification`
 - `locals.name` → `local.name`
 
-**Fix:** Global find-and-replace of `autoscalling` → `autoscaling` across the file, plus fixing the metric name and `locals.` → `local.` references.
+Global find-and-replace of `autoscalling` → `autoscaling` gets most of it.
 
 ---
 
-## Problem 5: ASG module — `filters = [...]` syntax rejected
+## Problem 5: `filters = [...]` syntax not valid for data sources
 
 **Error:**
 ```
@@ -1620,9 +1286,8 @@ Error: Unsupported argument
   filters = [
 ```
 
-**Root cause:** The `aws_autoscaling_groups` data source does not accept a `filters` list argument. It uses separate `filter {}` blocks.
+The `aws_autoscaling_groups` data source doesn't take a `filters` list argument. It uses separate `filter {}` blocks.
 
-**Fix:**
 ```hcl
 # Wrong
 data "aws_autoscaling_groups" "eks_nodes" {
@@ -1647,7 +1312,7 @@ data "aws_autoscaling_groups" "eks_nodes" {
 
 ---
 
-## Problem 6: Security groups — `ip_protocol` and non-list `cidr_blocks`
+## Problem 6: Wrong protocol attribute and non-list `cidr_blocks` in security groups
 
 **Error:**
 ```
@@ -1655,19 +1320,16 @@ Error: Unsupported argument "ip_protocol"
 Error: Incorrect attribute value type — "0.0.0.0/0" (string) cannot be used as cidr_blocks
 ```
 
-**Root cause:** The `aws_security_group` inline `ingress`/`egress` blocks use `protocol` (not `ip_protocol`) and `cidr_blocks` must be a list, not a plain string.
+Inside `aws_security_group` inline `ingress`/`egress` blocks, the attribute is `protocol` not `ip_protocol`. (`ip_protocol` is used in `aws_vpc_security_group_ingress_rule`, which is a completely different resource type.) Also, `cidr_blocks` must be a list.
 
-`ip_protocol` is the attribute name used in the standalone `aws_vpc_security_group_ingress_rule` resource — a different resource type.
-
-**Fix:**
 ```hcl
-# Wrong (inline ingress block)
+# Wrong
 ingress {
   ip_protocol = "-1"
   cidr_blocks = "0.0.0.0/0"
 }
 
-# Correct (inline ingress block)
+# Correct
 ingress {
   protocol    = "-1"
   cidr_blocks = ["0.0.0.0/0"]
@@ -1676,7 +1338,7 @@ ingress {
 
 ---
 
-## Problem 7: Security group — `aws_security_group` used instead of `aws_security_group_rule`
+## Problem 7: `aws_security_group` used where `aws_security_group_rule` was needed
 
 **Error:**
 ```
@@ -1685,9 +1347,8 @@ Error: Unsupported argument
   source_security_group_id is not a valid argument for aws_security_group
 ```
 
-**Root cause:** The rule that allows ALB traffic to reach EKS nodes (`alb_to_nodes`) was mistakenly written as an `aws_security_group` resource instead of an `aws_security_group_rule` resource. Security groups cannot reference other security groups in their inline blocks — cross-SG references require a standalone `aws_security_group_rule`.
+The `alb_to_nodes` rule — which lets the ALB reach port 3000 on worker nodes — was accidentally declared as an `aws_security_group` resource instead of an `aws_security_group_rule`. You can't reference another security group as a source inside an `aws_security_group` inline block; that requires a standalone rule resource.
 
-**Fix:**
 ```hcl
 # Wrong
 resource "aws_security_group" "alb_to_nodes" {
@@ -1709,7 +1370,7 @@ resource "aws_security_group_rule" "alb_to_nodes" {
 
 ---
 
-## Problem 8: EKS module — dangling `tags {}` block outside any resource
+## Problem 8: Stray `tags {}` block outside any resource in the EKS module
 
 **Error:**
 ```
@@ -1718,13 +1379,11 @@ Error: Unsupported block type
   tags {
 ```
 
-**Root cause:** A stray `tags {}` block appeared after the last `}` that closed the final resource. It was outside any resource and Terraform rejected it as a top-level block.
-
-**Fix:** Deleted the orphaned block (lines 314–318 of the original file).
+A `tags {}` block ended up outside the closing `}` of the last resource — Terraform sees it as a top-level block, which isn't valid. Deleted lines 314–318.
 
 ---
 
-## Problem 9: S3 lifecycle rule — missing `filter {}` block
+## Problem 9: S3 lifecycle rule missing the required `filter {}` block
 
 **Error:**
 ```
@@ -1732,9 +1391,8 @@ Error: Missing required argument
   The argument "filter" is required for aws_s3_bucket_lifecycle_configuration rule
 ```
 
-**Root cause:** AWS requires every S3 lifecycle rule to have a `filter {}` block specifying which objects the rule applies to. An empty `filter {}` means "apply to all objects."
+Every S3 lifecycle rule needs a `filter {}` block specifying which objects it applies to. An empty `filter {}` means "all objects."
 
-**Fix:**
 ```hcl
 rule {
   id     = "abort-incomplete-multipart"
@@ -1750,7 +1408,7 @@ rule {
 
 ---
 
-## Problem 10: Non-ASCII em-dashes in security group descriptions rejected by AWS
+## Problem 10: Em-dashes in security group descriptions
 
 **Error:**
 ```
@@ -1758,13 +1416,11 @@ Error: creating Security Group: InvalidParameterValue: Invalid description
   description = "EKS nodes — allow self"
 ```
 
-**Root cause:** The `—` character (em-dash, Unicode U+2014) is not in the ASCII character set. AWS security group descriptions only accept printable ASCII characters (letters, numbers, spaces, and `_.:/-`).
-
-**Fix:** Replaced all em-dashes with ASCII hyphens (`-`) in all security group description strings.
+The `—` character is Unicode U+2014 (em-dash), not an ASCII hyphen. AWS security group descriptions only accept printable ASCII. This happened because descriptions were typed in an editor that auto-converted `--` to `—`. Replaced all em-dashes with regular hyphens.
 
 ---
 
-## Problem 11: RDS — Performance Insights not supported on db.t3.micro
+## Problem 11: Performance Insights rejected on db.t3.micro
 
 **Error:**
 ```
@@ -1772,19 +1428,17 @@ Error: modifying RDS DB Instance: InvalidParameterCombination:
   Performance Insights is not supported for DB instance class db.t3.micro
 ```
 
-**Root cause:** AWS Performance Insights requires `db.t3.small` or larger. The dev environment uses `db.t3.micro` to minimise cost.
+AWS Performance Insights requires `db.t3.small` or larger. Simple fix:
 
-**Fix:**
 ```hcl
-# modules/rds/main.tf
 performance_insights_enabled = false
 ```
 
-Performance Insights is supported in the prod tfvars where `db_instance_class = "db.t3.small"`.
+It's enabled in prod where we use `db.t3.small`.
 
 ---
 
-## Problem 12: Route53 — `count` depends on unknown value during plan
+## Problem 12: Route53 `count` depends on an unknown value
 
 **Error:**
 ```
@@ -1793,13 +1447,10 @@ Error: Invalid count argument
   until apply, so Terraform cannot predict how many instances will be created.
 ```
 
-**Root cause:** The Route53 record was written with `count = var.alb_dns_name != "" ? 1 : 0`. Because `alb_dns_name` was derived from another resource's output (not a static variable), its value was unknown at plan time — Terraform cannot evaluate the conditional.
-
-**Fix:** Removed the conditional count entirely. The Route53 record is always created:
+The Route53 record had `count = var.alb_dns_name != "" ? 1 : 0`. The ALB DNS name comes from another resource's output — its value isn't known until apply time, so Terraform can't evaluate the conditional during plan. Removed the conditional count entirely; the record is always created.
 
 ```hcl
 resource "aws_route53_record" "app" {
-  # removed: count = var.alb_dns_name != "" ? 1 : 0
   zone_id = data.aws_route53_zone.main.zone_id
   name    = "${var.subdomain}.${var.domain}"
   type    = "A"
@@ -1819,14 +1470,10 @@ resource "aws_route53_record" "app" {
 ```
 Error: Kubernetes cluster unreachable: the server doesn't have a resource type "helmrelease"
 ```
-or
-```
-Error: configuring Terraform AWS Provider: no valid credential sources found
-```
 
-**Root cause:** The Terraform configuration included a `provider "helm"` block that needed the EKS cluster endpoint and certificate to connect. But those values are only available after the EKS cluster is created — which happens during the same `terraform apply`. Terraform evaluates all providers before running any resources, creating a deadlock.
+We originally tried to install the Cluster Autoscaler via a `helm_release` resource in Terraform. The problem: the Helm provider needs the EKS cluster endpoint to connect, but that endpoint doesn't exist until the cluster is created — which is in the same `terraform apply`. Terraform evaluates all providers before running any resources, so it deadlocks.
 
-**Fix:** Removed the `provider "helm"` block and all `helm_release` resources from Terraform entirely. The Cluster Autoscaler is now installed manually via Helm CLI after the EKS cluster is up:
+The solution was to remove the `provider "helm"` block and all `helm_release` resources from Terraform entirely and install the Cluster Autoscaler manually via Helm CLI after the cluster is up:
 
 ```bash
 helm repo add autoscaler https://kubernetes.github.io/autoscaler
@@ -1839,7 +1486,7 @@ helm install cluster-autoscaler autoscaler/cluster-autoscaler \
 
 ---
 
-## Problem 14: CloudWatch log groups already existed in AWS
+## Problem 14: CloudWatch log groups already existed
 
 **Error:**
 ```
@@ -1847,9 +1494,7 @@ Error: creating CloudWatch Logs Log Group: ResourceAlreadyExistsException:
   The specified log group already exists: /aws/eks/todo-tf-cluster-dev/cluster
 ```
 
-**Root cause:** EKS automatically creates its own log group when control plane logging is enabled. When Terraform tries to create the same log group, AWS rejects it.
-
-**Fix:** Import the existing log groups into Terraform state so Terraform adopts them instead of creating new ones:
+EKS automatically creates its own log group when control plane logging is enabled. When Terraform tries to create the same one, AWS rejects it. Rather than deleting the log group (which would lose logs), we imported it into state so Terraform manages it going forward:
 
 ```bash
 terraform import -var-file=environments/dev/terraform.tfvars \
@@ -1861,11 +1506,9 @@ terraform import -var-file=environments/dev/terraform.tfvars \
   /todo/dev/application
 ```
 
-After import, `terraform plan` shows no changes for these resources.
-
 ---
 
-## Problem 15: IAM roles and policies already existed in AWS
+## Problem 15: IAM roles and policies already existed
 
 **Error:**
 ```
@@ -1873,28 +1516,21 @@ Error: creating IAM Role: EntityAlreadyExists: Role with name todo-dev-eks-clust
 Error: creating IAM Policy: EntityAlreadyExists: A policy called todo-dev-alb-controller-policy already exists.
 ```
 
-**Root cause:** A previous interrupted `terraform apply` (or manual AWS console work) had already created these IAM resources. Terraform's state file didn't know they existed, so it tried to create them again.
-
-**Fix:** Import each resource into state:
+An earlier interrupted apply had already created these. Terraform's state didn't know about them, so it tried to create them again. Import was the right call:
 
 ```bash
-# EKS cluster role
 terraform import -var-file=environments/dev/terraform.tfvars \
   module.eks.aws_iam_role.eks_cluster todo-dev-eks-cluster-role
 
-# EKS node role
 terraform import -var-file=environments/dev/terraform.tfvars \
   module.eks.aws_iam_role.eks_nodes todo-dev-eks-node-role
 
-# EBS CSI driver role
 terraform import -var-file=environments/dev/terraform.tfvars \
   module.eks.aws_iam_role.ebs_csi todo-dev-ebs-csi-role
 
-# ALB controller role
 terraform import -var-file=environments/dev/terraform.tfvars \
   module.eks.aws_iam_role.alb_controller todo-dev-alb-controller-role
 
-# ALB controller policy (import by ARN)
 terraform import -var-file=environments/dev/terraform.tfvars \
   module.eks.aws_iam_policy.alb_controller \
   arn:aws:iam::668076964228:policy/todo-dev-alb-controller-policy
@@ -1902,17 +1538,15 @@ terraform import -var-file=environments/dev/terraform.tfvars \
 
 ---
 
-## Problem 16: Route53 CNAME record conflicted with new A alias record
+## Problem 16: Route53 CNAME conflicted with the new A alias record
 
 **Error:**
 ```
 Error: [ERR]: Error building changeset: InvalidChangeBatch:
-  RRSet of type CNAME with DNS name www.ankit.services. is not permitted at apex in zone ankit.services.
+  RRSet of type CNAME with DNS name www.ankit.services. is not permitted at apex
 ```
 
-**Root cause:** During an earlier attempt, the ALB controller had auto-created a CNAME record pointing `www.ankit.services` to the controller-managed ALB DNS name. Terraform's Route53 module was trying to create an A alias record at the same name — two records of different types at the same name conflict.
-
-**Fix:** Manually deleted the old CNAME record via AWS CLI:
+During an earlier attempt the ALB controller had auto-created a CNAME record pointing `www.ankit.services` at the controller-managed ALB. Terraform was trying to create an A alias record at the same name. Two record types at the same name conflict. Deleted the CNAME manually:
 
 ```bash
 aws route53 change-resource-record-sets \
@@ -1930,25 +1564,22 @@ aws route53 change-resource-record-sets \
   }'
 ```
 
-Then re-ran `terraform apply` to create the correct A alias record.
+Then `terraform apply` created the correct A alias record.
 
 ---
 
-## Problem 17: ALB controller CrashLoopBackOff — missing VPC ID and region
+## Problem 17: ALB controller in CrashLoopBackOff — VPC ID and region missing
 
 **Symptom:**
 ```
 $ kubectl get pods -n kube-system
-NAME                                           READY   STATUS             RESTARTS
-aws-load-balancer-controller-xxx               0/1     CrashLoopBackOff   5
+aws-load-balancer-controller-xxx    0/1    CrashLoopBackOff    5
 
 $ kubectl logs -n kube-system deployment/aws-load-balancer-controller
 level=error msg="VPC ID must be specified"
 ```
 
-**Root cause:** The Helm install command was missing required values. The ALB controller needs to know which VPC to manage and which AWS region it is running in. Without these, it crashes on startup.
-
-**Fix:** Reinstall with the missing flags:
+The initial Helm install was missing `--set vpcId` and `--set region`. The controller needs both to function and crashes immediately without them. Reinstalled with the missing values:
 
 ```bash
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
@@ -1962,22 +1593,21 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
 
 ---
 
-## Problem 18: Webhook `context deadline exceeded` — wrong node security group
+## Problem 18: Webhook `context deadline exceeded` — nodes had the wrong security group
 
 **Symptom:**
 ```
 $ kubectl apply -f app/k8s/
-Error from server (InternalError): error when creating "deployment.yaml":
-  Internal error occurred: failed calling webhook "mpod.elbv2.k8s.aws":
+Error from server (InternalError): failed calling webhook "mpod.elbv2.k8s.aws":
   Post "https://aws-load-balancer-webhook-service.kube-system.svc:443/mutate-v1-pod":
   context deadline exceeded
 ```
 
-**Root cause:** The Kubernetes API server routes webhook calls through the cluster's internal network. The webhook pod lives on a node with security group `sg-04f784e2a0b0c0f10` (applied by the initial failed Terraform apply). However, Terraform's security group rules were written to a new SG `sg-0910a9a61b664d82d` created by a later apply. The cluster's security group `sg-0d1c831b59c30df03` had no inbound rules allowing it to reach port 443 on the actual node SG.
+This one took the longest to understand. The nodes had security group `sg-04f784e2a0b0c0f10`, which was assigned during the first (interrupted) Terraform apply. The second apply created a new SG `sg-0910a9a61b664d82d` and applied all the rules to that one. The control plane SG (`sg-0d1c831b59c30df03`) had no rules allowing it to reach port 443 or 10250 on the actual node SG.
 
-**Root cause in plain English:** Nodes got their SG from the first (interrupted) Terraform apply. Terraform's rules went into a different SG from the second apply. The control plane couldn't reach the nodes on ports 443 (webhooks) or 10250 (kubelet).
+In plain terms: the nodes and Terraform's security group rules were out of sync. The control plane couldn't reach the nodes for webhook calls or kubelet communication.
 
-**Fix:** Manually added the required rules to the actual node SG (`sg-04f784e2a0b0c0f10`) from the cluster SG (`sg-0d1c831b59c30df03`):
+Fix: manually added the required rules to the actual node SG:
 
 ```bash
 # Allow kubelet API (port 10250)
@@ -1992,14 +1622,14 @@ aws ec2 authorize-security-group-ingress \
   --protocol tcp --port 443 \
   --source-group sg-0d1c831b59c30df03
 
-# Allow high ports (1025-65535) for NodePort and ephemeral traffic
+# Allow high ports for NodePort and ephemeral traffic
 aws ec2 authorize-security-group-ingress \
   --group-id sg-04f784e2a0b0c0f10 \
   --protocol tcp --port 1025-65535 \
   --source-group sg-0d1c831b59c30df03
 ```
 
-**Long-term fix:** Ensure Terraform manages only one node SG and does not create a second one during re-apply. Or use `terraform state rm` and re-import the correct SG so state and reality align.
+The long-term fix is to ensure Terraform doesn't end up managing a different SG than what the nodes were actually assigned — either by importing the existing SG into state or by doing a clean teardown and redeploy.
 
 ---
 
@@ -2008,36 +1638,29 @@ aws ec2 authorize-security-group-ingress \
 **Symptom:**
 ```
 $ kubectl logs -n kube-system deployment/aws-load-balancer-controller
-AccessDenied: User: arn:aws:sts::668076964228:assumed-role/todo-dev-alb-controller-role/...
-  is not authorized to perform: elasticloadbalancing:DescribeListenerAttributes
-  on resource: arn:aws:elasticloadbalancing:...
+AccessDenied: not authorized to perform: elasticloadbalancing:DescribeListenerAttributes
 ```
 
-**Root cause:** The IAM policy file (`alb-controller-policy.json`) was based on an older version of the AWS Load Balancer Controller. Version 3.3.0+ requires the `elasticloadbalancing:DescribeListenerAttributes` permission, which was not in the original policy.
+The IAM policy file we used was copied from documentation for an older controller version. Version 3.3.0+ added `elasticloadbalancing:DescribeListenerAttributes` as a required permission. The policy didn't have it.
 
-**Fix (immediate — add permission to existing policy):**
+Immediate fix — add the permission to the existing policy without waiting for a full Terraform run:
 
 ```bash
-# Get current policy ARN
 POLICY_ARN=$(aws iam list-policies --query \
   "Policies[?PolicyName=='todo-dev-alb-controller-policy'].Arn" \
   --output text)
 
-# Create a new policy version with the added permission
 aws iam create-policy-version \
   --policy-arn $POLICY_ARN \
   --policy-document file://updated-policy.json \
   --set-as-default
 ```
 
-**Fix (permanent — update the policy file):**
-Added `"elasticloadbalancing:DescribeListenerAttributes"` to the `Action` list in `infra/terraform/modules/eks/alb-controller-policy.json`.
-
-The controller recovers automatically after the IAM update — no pod restart needed.
+Permanent fix: added `"elasticloadbalancing:DescribeListenerAttributes"` to the action list in `infra/terraform/modules/eks/alb-controller-policy.json`. The controller picked up the new permissions automatically without needing a restart.
 
 ---
 
-## Problem 20: Backend pods crashing — wrong DB_HOST and DB_PASSWORD in Secret
+## Problem 20: Backend pods crashing — wrong DB_HOST and wrong password
 
 **Symptom 1:**
 ```
@@ -2045,17 +1668,12 @@ $ kubectl logs -n todo deployment/todo-backend
 Error: getaddrinfo ENOTFOUND todo-db
 ```
 
-**Root cause 1:** The `DB_HOST` value in `app/k8s/secret.yaml` was base64-encoded `todo-db` (a placeholder from earlier). The actual RDS endpoint created by Terraform is `todo-db-dev.c23qc6e80bp5.us-east-1.rds.amazonaws.com`.
+The `DB_HOST` in the Secret was base64-encoded `todo-db` — a placeholder that was never updated. The actual RDS endpoint from Terraform is `todo-db-dev.c23qc6e80bp5.us-east-1.rds.amazonaws.com`. Got the correct value and updated the Secret:
 
-**Fix:** Re-encode the correct hostname:
 ```bash
 terraform -chdir=infra/terraform output -raw rds_endpoint | cut -d: -f1 | base64
 # → dG9kby1kYi1kZXYuYzIzcWM2ZTgwYnA1LnVzLWVhc3QtMS5yZHMuYW1hem9uYXdzLmNvbQ==
 ```
-
-Update `secret.yaml` with the new value.
-
----
 
 **Symptom 2:**
 ```
@@ -2063,11 +1681,8 @@ $ kubectl logs -n todo deployment/todo-backend
 Error: Access denied for user 'todo_user'@'...' (using password: YES)
 ```
 
-**Root cause 2:** The initial `DB_PASSWORD` in the Secret was `rootpass` (a placeholder). The RDS master password had been set via `TF_VAR_rds_password` but the Secret was never updated to match. Additionally, an earlier attempt used `tododev` (7 characters) which AWS RDS rejected — RDS requires a minimum 8-character password.
+Two issues here. First, the password in the Secret was still the placeholder `rootpass`. Second, when we tried to fix it, we used `tododev` (7 characters) — AWS RDS requires a minimum 8-character password and silently rejected it. Reset the master password with a valid value:
 
-**Fix:**
-
-1. Reset the RDS master password to a valid value (minimum 8 characters):
 ```bash
 aws rds modify-db-instance \
   --db-instance-identifier todo-db-dev \
@@ -2075,34 +1690,30 @@ aws rds modify-db-instance \
   --apply-immediately
 ```
 
-2. Wait ~60 seconds for the password change to propagate.
+Waited ~60 seconds for the change to propagate, then updated the Secret:
 
-3. Re-encode the new password and update the Secret:
 ```bash
 echo -n "tododev1" | base64
 # → dG9kb2RldjE=
-```
 
-4. Apply the updated Secret:
-```bash
 kubectl apply -f app/k8s/secret.yaml
 kubectl rollout restart deployment/todo-backend -n todo
 ```
 
 ---
 
-## Key Lessons
+## Lessons from All of This
 
-| # | Lesson |
+| # | What we learned |
 |---|--------|
-| 1–4 | Small typos in Terraform (double-l, wrong prefix) cause cryptic errors — validate with `terraform validate` before apply |
-| 5–7 | Check the AWS provider documentation for exact attribute names — the Terraform registry docs are authoritative |
-| 8 | Every `{}` block must be inside a resource; stray top-level blocks break the whole file |
-| 10 | AWS APIs only accept printable ASCII — copy-pasting from word processors introduces invisible characters |
-| 11 | Instance class constraints exist for many AWS features — check compatibility before enabling |
-| 12–13 | Terraform `count` and provider blocks cannot depend on values unknown at plan time |
-| 14–16 | When re-running Terraform on an account that already has resources, `terraform import` is the right tool — never delete-and-recreate manually managed resources |
-| 17 | Read the controller's startup logs before assuming the issue is network or IAM — the error message is usually specific |
-| 18 | Security groups must match the actual SG assigned to nodes, not the SG Terraform thinks it assigned |
-| 19 | Keep IAM policies up to date with the controller version — new permissions are added in minor releases |
-| 20 | Always encode real values in Secrets before deploying — placeholder base64 strings will silently connect to nonexistent hosts |
+| 1–4 | Run `terraform validate` before every apply — it catches typos and wrong attribute names in seconds |
+| 5–7 | When Terraform rejects an attribute name, look it up in the Terraform registry docs rather than guessing. `ip_protocol` vs `protocol` is a good example of two resources with similar-but-different schemas |
+| 8 | Every block in a `.tf` file has to live inside a resource, data source, or module. A stray block at the top level breaks the whole file |
+| 10 | Copy-pasting from word processors or certain editors can silently introduce Unicode characters that AWS APIs reject |
+| 11 | Check AWS feature compatibility for your instance class before enabling monitoring features |
+| 12–13 | Terraform `count` and provider configuration can't depend on values that are unknown at plan time — this is a fundamental constraint, not a bug |
+| 14–16 | When resources already exist in AWS but not in Terraform state, `terraform import` is almost always the right answer. Deleting and recreating loses data and can cause downtime |
+| 17 | Always check the pod logs first — the error message is usually specific enough to point straight at the problem |
+| 18 | Security group state drifts badly when applies are interrupted. After an interrupted apply, verify that the SG IDs assigned to your nodes match what Terraform thinks it configured |
+| 19 | IAM policies need to stay in sync with the component version that uses them — always check the changelog when upgrading controllers |
+| 20 | Never deploy with placeholder values in Secrets. Base64-decoding a secret is trivial, so it's easy to verify you have the right value before applying |
