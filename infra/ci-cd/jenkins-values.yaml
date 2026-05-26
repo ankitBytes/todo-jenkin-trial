@@ -24,15 +24,15 @@ controller:
       alb.ingress.kubernetes.io/success-codes: '200,302,403'
     hostName: jenkins.ankit.services
 
-    installPlugins:
-    - kubernetes
-    - workflow-aggregator
-    - git
-    - github
-    - amazon-ecr
-    - aws-credentials
-    - credentials-binding
-    - pipeline-stage-view
+  installPlugins:
+   - kubernetes
+   - workflow-aggregator
+   - git
+   - github
+   - amazon-ecr
+   - aws-credentials
+   - credentials-binding
+   - pipeline-stage-view
 
 serviceAccount:
   create: true
