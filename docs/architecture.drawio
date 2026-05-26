@@ -1,0 +1,360 @@
+<mxfile host="app.diagrams.net" modified="2026-05-22T00:00:00.000Z" agent="Claude Code" version="21.0.0" type="device">
+  <diagram name="Todo Fullstack Architecture" id="todo-arch-v1">
+    <mxGraphModel dx="1800" dy="1200" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1400" math="0" shadow="1">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TITLE -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="title" value="Todo Fullstack — AWS Production Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="1100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="AWS Account: 668076964228 | Region: us-east-1 | Domain: ankit.services | EKS: todo-tf-cluster (k8s 1.30)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="400" y="58" width="1100" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ZONE 1: INTERNET -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="z_internet" value="INTERNET" style="swimlane;fontStyle=1;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;startSize=30;rounded=1;arcSize=4;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="95" width="170" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="user" value="👤 User Browser&#xa;HTTPS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="z_internet">
+          <mxGeometry x="20" y="50" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="developer" value="💻 Developer&#xa;git push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="z_internet">
+          <mxGeometry x="20" y="140" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ZONE 2: AWS EDGE / DNS / TLS -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="z_edge" value="AWS EDGE — DNS &amp; TLS Termination" style="swimlane;fontStyle=1;fontSize=12;fillColor=#ffe6cc;strokeColor=#d6b656;startSize=30;rounded=1;arcSize=4;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="230" y="95" width="200" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="route53" value="🌐 Route53&#xa;www.ankit.services&#xa;A Alias Record" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="z_edge">
+          <mxGeometry x="20" y="45" width="160" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="acm" value="🔒 ACM Certificate&#xa;TLS 1.2 / 1.3&#xa;*.ankit.services" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="z_edge">
+          <mxGeometry x="20" y="120" width="160" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="alb" value="⚖️ AWS ALB&#xa;internet-facing&#xa;HTTP:80→301  HTTPS:443&#xa;Path-based routing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=10;fontStyle=1;" vertex="1" parent="z_edge">
+          <mxGeometry x="20" y="195" width="160" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ZONE 3: VPC -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="z_vpc" value="AWS VPC — 10.0.0.0/16 (Dev)  |  Security Groups: ALB→Node SG, Node→RDS SG, Node→Redis SG" style="swimlane;fontStyle=1;fontSize=11;fillColor=#d5e8d4;strokeColor=#82b366;startSize=30;rounded=1;arcSize=3;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="460" y="95" width="1050" height="680" as="geometry" />
+        </mxCell>
+
+        <!-- PUBLIC SUBNETS -->
+        <mxCell id="z_pub" value="Public Subnets (AZ-a, AZ-b)" style="swimlane;fontStyle=1;fontSize=10;fillColor=#f0f7ee;strokeColor=#82b366;startSize=24;rounded=1;arcSize=4;dashed=1;" vertex="1" parent="z_vpc">
+          <mxGeometry x="20" y="40" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="igw" value="🌐 Internet Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="z_pub">
+          <mxGeometry x="20" y="35" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="nat" value="🔀 NAT Gateway&#xa;(private egress)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="z_pub">
+          <mxGeometry x="20" y="105" width="160" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- PRIVATE SUBNETS -->
+        <mxCell id="z_priv" value="Private Subnets (AZ-a, AZ-b)" style="swimlane;fontStyle=1;fontSize=10;fillColor=#f9f7ff;strokeColor=#82b366;startSize=24;rounded=1;arcSize=4;dashed=1;" vertex="1" parent="z_vpc">
+          <mxGeometry x="250" y="40" width="780" height="625" as="geometry" />
+        </mxCell>
+
+        <!-- EKS CLUSTER -->
+        <mxCell id="z_eks" value="EKS Cluster — todo-tf-cluster  |  Kubernetes 1.30  |  Node Group: t3.medium × 2–4  |  OIDC + IRSA" style="swimlane;fontStyle=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;startSize=28;rounded=1;arcSize=3;" vertex="1" parent="z_priv">
+          <mxGeometry x="20" y="35" width="740" height="575" as="geometry" />
+        </mxCell>
+
+        <!-- NAMESPACE: todo -->
+        <mxCell id="z_ns_todo" value="Namespace: todo" style="swimlane;fontStyle=1;fontSize=10;fillColor=#f3e8ff;strokeColor=#9673a6;startSize=24;rounded=1;arcSize=4;dashed=1;" vertex="1" parent="z_eks">
+          <mxGeometry x="20" y="38" width="470" height="520" as="geometry" />
+        </mxCell>
+
+        <!-- Ingress -->
+        <mxCell id="ingress" value="🔀 AWS LB Controller&#xa;Ingress&#xa;host: www.ankit.services" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontStyle=1;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="15" y="38" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend Deployment -->
+        <mxCell id="z_fe_deploy" value="Frontend Deployment" style="swimlane;fontStyle=1;fontSize=9;fillColor=#e8f4e8;strokeColor=#6aaa6a;startSize=20;rounded=1;arcSize=4;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="15" y="125" width="210" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="fe_pod1" value="📦 Frontend Pod 1&#xa;nginx:1.25-alpine&#xa;port: 3000&#xa;Static: HTML/CSS/JS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4e8;strokeColor=#6aaa6a;fontSize=9;" vertex="1" parent="z_fe_deploy">
+          <mxGeometry x="10" y="28" width="85" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="fe_pod2" value="📦 Frontend Pod 2&#xa;nginx:1.25-alpine&#xa;port: 3000&#xa;Static: HTML/CSS/JS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4e8;strokeColor=#6aaa6a;fontSize=9;" vertex="1" parent="z_fe_deploy">
+          <mxGeometry x="110" y="28" width="85" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="hpa_fe" value="📈 HPA Frontend&#xa;2–6 replicas&#xa;CPU: 70%  Mem: 80%" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="z_fe_deploy">
+          <mxGeometry x="10" y="115" width="185" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Backend Deployment -->
+        <mxCell id="z_be_deploy" value="Backend Deployment" style="swimlane;fontStyle=1;fontSize=9;fillColor=#e8eef8;strokeColor=#5a8ad6;startSize=20;rounded=1;arcSize=4;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="245" y="125" width="210" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="be_pod1" value="📦 Backend Pod 1&#xa;node:20-alpine&#xa;Express :3000&#xa;CORS / JSON / Routes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8eef8;strokeColor=#5a8ad6;fontSize=9;" vertex="1" parent="z_be_deploy">
+          <mxGeometry x="10" y="28" width="85" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="be_pod2" value="📦 Backend Pod 2&#xa;node:20-alpine&#xa;Express :3000&#xa;CORS / JSON / Routes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8eef8;strokeColor=#5a8ad6;fontSize=9;" vertex="1" parent="z_be_deploy">
+          <mxGeometry x="110" y="28" width="85" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="hpa_be" value="📈 HPA Backend&#xa;2–10 replicas&#xa;CPU: 70%  Mem: 80%" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="z_be_deploy">
+          <mxGeometry x="10" y="115" width="185" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ConfigMap + Secret -->
+        <mxCell id="configmap" value="⚙️ ConfigMap: todo-config&#xa;PORT=3000  DB_NAME=todo_db&#xa;ALLOWED_ORIGIN=https://www.ankit.services" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="15" y="320" width="210" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="k8s_secret" value="🔐 Secret: todo-secret&#xa;DB_HOST / DB_USER / DB_PASSWORD&#xa;REDIS_HOST / REDIS_PASSWORD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="245" y="320" width="210" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- NetworkPolicy + PDB -->
+        <mxCell id="netpol" value="🛡️ NetworkPolicy&#xa;ALB(10.0.0.0/8)→FE→BE&#xa;BE egress: all (RDS+Redis)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="15" y="395" width="210" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="pdb" value="🔒 PodDisruptionBudget&#xa;Frontend: minAvailable=1&#xa;Backend: minAvailable=1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="245" y="395" width="210" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Services (ClusterIP) -->
+        <mxCell id="fe_svc" value="ClusterIP :80&#xa;todo-frontend-svc" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="75" y="465" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="be_svc" value="ClusterIP :80&#xa;todo-backend-svc" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;" vertex="1" parent="z_ns_todo">
+          <mxGeometry x="295" y="465" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- NAMESPACE: kube-system -->
+        <mxCell id="z_ns_sys" value="Namespace: kube-system" style="swimlane;fontStyle=1;fontSize=9;fillColor=#f5f5f5;strokeColor=#9673a6;startSize=20;rounded=1;arcSize=4;dashed=1;" vertex="1" parent="z_eks">
+          <mxGeometry x="510" y="38" width="215" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="lbc" value="AWS LB Controller&#xa;IRSA: alb-controller-role&#xa;Manages ALB lifecycle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=9;" vertex="1" parent="z_ns_sys">
+          <mxGeometry x="10" y="28" width="195" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ca" value="Cluster Autoscaler&#xa;IRSA: cluster-autoscaler-role&#xa;Scales node group 1–4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=9;" vertex="1" parent="z_ns_sys">
+          <mxGeometry x="10" y="84" width="195" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- NAMESPACE: jenkins -->
+        <mxCell id="z_ns_jenkins" value="Namespace: jenkins" style="swimlane;fontStyle=1;fontSize=9;fillColor=#fff8e1;strokeColor=#9673a6;startSize=20;rounded=1;arcSize=4;dashed=1;" vertex="1" parent="z_eks">
+          <mxGeometry x="510" y="198" width="215" height="400" as="geometry" />
+        </mxCell>
+        <mxCell id="jenkins_ctrl" value="🔧 Jenkins Controller&#xa;Helm-deployed&#xa;PVC: 20Gi&#xa;IRSA: jenkins-role&#xa;(ECR + EKS + Terraform)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="z_ns_jenkins">
+          <mxGeometry x="10" y="28" width="195" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="jenkins_agent" value="🤖 K8s Build Agent Pod&#xa;(spawned per pipeline)&#xa;├─ jenkins-agent container&#xa;│   AWS CLI + kubectl&#xa;│   Terraform 1.9&#xa;└─ docker:dind sidecar&#xa;    docker build / push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=8;" vertex="1" parent="z_ns_jenkins">
+          <mxGeometry x="10" y="128" width="195" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="jenkins_plugins" value="Plugins: kubernetes, git, amazon-ecr&#xa;aws-credentials, pipeline-stage-view" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=8;" vertex="1" parent="z_ns_jenkins">
+          <mxGeometry x="10" y="268" width="195" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="jenkins_stages" value="Pipeline Stages (parallel):&#xa;✓ Frontend: build→push→rollout&#xa;✓ Backend: build→push→rollout&#xa;✓ Infra: tf init→validate→plan→apply&#xa;✓ Auto-rollback on failure" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=8;align=left;spacingLeft=5;" vertex="1" parent="z_ns_jenkins">
+          <mxGeometry x="10" y="315" width="195" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- DATA STORES in private subnet -->
+        <mxCell id="rds" value="🗄️ RDS MySQL 8.0&#xa;todo-db-dev&#xa;db.t3.micro (dev) | db.t3.small (prod)&#xa;Multi-AZ: prod only&#xa;Storage: gp3, encrypted&#xa;Backup: 3d/7d  Port: 3306&#xa;Pool: 10 connections" style="shape=mxgraph.cisco.servers.standard_server;html=1;dashed=0;outline=0;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;rounded=1;arcSize=4;" vertex="1" parent="z_priv">
+          <mxGeometry x="20" y="430" width="210" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="redis" value="⚡ ElastiCache Redis 7.1&#xa;todo-redis-dev&#xa;cache.t3.micro&#xa;At-rest encryption: ON&#xa;Auth password: yes&#xa;TTL: 60s  Port: 6379&#xa;Key: todos:all (cache-aside)" style="shape=mxgraph.cisco.servers.standard_server;html=1;dashed=0;outline=0;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;rounded=1;arcSize=4;" vertex="1" parent="z_priv">
+          <mxGeometry x="260" y="430" width="210" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ZONE 4: AWS MANAGED SERVICES (bottom strip) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="z_aws_svc" value="AWS Managed Services" style="swimlane;fontStyle=1;fontSize=12;fillColor=#f0f0f0;strokeColor=#999999;startSize=30;rounded=1;arcSize=3;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="800" width="1480" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="ecr" value="📦 AWS ECR&#xa;todo-frontend&#xa;todo-backend&#xa;Scan-on-push, AES256&#xa;Lifecycle: keep 5 tagged" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="20" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s3_tf" value="🪣 S3 — TF State&#xa;todo-tf-state-668076964228&#xa;Versioned, encrypted&#xa;Dev &amp; Prod keys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="195" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="dynamodb" value="🔐 DynamoDB&#xa;TF State Lock&#xa;Prevents concurrent&#xa;Terraform runs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="370" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s3_assets" value="🪣 S3 — Static Assets&#xa;Versioned, AES256&#xa;Block public access&#xa;Lifecycle: abort MPU &gt;7d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="545" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="cloudwatch" value="📊 CloudWatch&#xa;EKS control plane logs&#xa;api, audit, authenticator&#xa;controllerManager, scheduler&#xa;Dev: 14d | Prod: 30d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="720" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="secrets_mgr" value="🔑 Secrets Manager&#xa;Module defined in TF&#xa;⚠️ Not yet wired&#xa;to pod env vars" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="895" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="iam_irsa" value="🛡️ IAM / IRSA&#xa;ALB Controller role&#xa;Cluster Autoscaler role&#xa;Jenkins role (ECR+EKS+TF)&#xa;IMDSv2 enforced" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="1070" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="acm_svc" value="🔒 ACM&#xa;SSL Certificate&#xa;*.ankit.services&#xa;Auto-renewed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=9;" vertex="1" parent="z_aws_svc">
+          <mxGeometry x="1245" y="40" width="155" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- LEGEND -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="z_legend" value="Legend" style="swimlane;fontStyle=1;fontSize=11;fillColor=#ffffff;strokeColor=#666666;startSize=24;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="30" y="960" width="380" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" value="User Request Path (HTTPS)" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="z_legend">
+          <mxGeometry x="60" y="30" width="210" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1_arrow" value="" style="endArrow=block;endFill=1;strokeColor=#0066cc;strokeWidth=3;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="z_legend" source="leg1_s" target="leg1_e">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1_s" value="" style="point;fillColor=none;strokeColor=none;" vertex="1" parent="z_legend">
+          <mxGeometry x="15" y="38" width="5" height="5" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1_e" value="" style="point;fillColor=none;strokeColor=none;" vertex="1" parent="z_legend">
+          <mxGeometry x="55" y="38" width="5" height="5" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" value="CI/CD Pipeline Path" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="z_legend">
+          <mxGeometry x="60" y="58" width="210" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2_arrow" value="" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=2;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="z_legend" source="leg2_s" target="leg2_e">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2_s" value="" style="point;fillColor=none;strokeColor=none;" vertex="1" parent="z_legend">
+          <mxGeometry x="15" y="66" width="5" height="5" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2_e" value="" style="point;fillColor=none;strokeColor=none;" vertex="1" parent="z_legend">
+          <mxGeometry x="55" y="66" width="5" height="5" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3" value="Data Access / Image Pull" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="z_legend">
+          <mxGeometry x="60" y="86" width="210" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3_arrow" value="" style="endArrow=open;endFill=0;strokeColor=#006600;strokeWidth=1.5;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="z_legend" source="leg3_s" target="leg3_e">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3_s" value="" style="point;fillColor=none;strokeColor=none;" vertex="1" parent="z_legend">
+          <mxGeometry x="15" y="94" width="5" height="5" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3_e" value="" style="point;fillColor=none;strokeColor=none;" vertex="1" parent="z_legend">
+          <mxGeometry x="55" y="94" width="5" height="5" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_warn" value="⚠️ Red = Security concern" style="text;html=1;strokeColor=none;fillColor=#f8cecc;fontSize=10;rounded=1;" vertex="1" parent="z_legend">
+          <mxGeometry x="200" y="82" width="160" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- GITHUB (outside VPC, for CI/CD) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="github" value="🐙 GitHub&#xa;Repository&#xa;webhook → Jenkins" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="460" width="130" height="65" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TERRAFORM ENVIRONMENTS NOTE -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="tf_envs" value="Terraform Environments&#xa;Dev:  10.0.0.0/16 | t3.medium | db.t3.micro | No Multi-AZ&#xa;Prod: 10.1.0.0/16 | t3.large  | db.t3.small | Multi-AZ + Deletion Protection&#xa;State: S3 (encrypted) + DynamoDB (locked) per environment" style="text;html=1;strokeColor=#82b366;fillColor=#d5e8d4;fontSize=9;rounded=1;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="450" y="960" width="560" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- EDGES — USER REQUEST PATH (blue, solid) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- User → Route53 -->
+        <mxCell id="e_user_r53" value="HTTPS" style="endArrow=block;endFill=1;strokeColor=#0066cc;strokeWidth=2.5;fontSize=9;fontColor=#0066cc;fontStyle=1;" edge="1" parent="1" source="user" target="route53">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- Route53 → ALB -->
+        <mxCell id="e_r53_alb" value="Alias" style="endArrow=block;endFill=1;strokeColor=#0066cc;strokeWidth=2.5;fontSize=9;fontColor=#0066cc;" edge="1" parent="1" source="route53" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- ACM → ALB (TLS) -->
+        <mxCell id="e_acm_alb" value="TLS" style="endArrow=open;endFill=0;strokeColor=#b85450;strokeWidth=1.5;dashed=1;fontSize=9;" edge="1" parent="1" source="acm" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- ALB → Ingress -->
+        <mxCell id="e_alb_ingress" value="path: /  →  FE&#xa;path: /api/* → BE" style="endArrow=block;endFill=1;strokeColor=#0066cc;strokeWidth=2.5;fontSize=9;fontColor=#0066cc;fontStyle=1;" edge="1" parent="1" source="alb" target="ingress">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="700" y="280" /></Array></mxGeometry>
+        </mxCell>
+        <!-- Ingress → FE svc -->
+        <mxCell id="e_ing_fe" value="path: /" style="endArrow=block;endFill=1;strokeColor=#0066cc;strokeWidth=2;fontSize=9;" edge="1" parent="1" source="ingress" target="fe_svc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- Ingress → BE svc -->
+        <mxCell id="e_ing_be" value="path: /api/*&#xa;path: /health" style="endArrow=block;endFill=1;strokeColor=#0066cc;strokeWidth=2;fontSize=9;" edge="1" parent="1" source="ingress" target="be_svc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- FE svc → FE pods -->
+        <mxCell id="e_fesvc_fe1" value="" style="endArrow=open;endFill=0;strokeColor=#6aaa6a;strokeWidth=1.5;" edge="1" parent="1" source="fe_svc" target="fe_pod1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fesvc_fe2" value="" style="endArrow=open;endFill=0;strokeColor=#6aaa6a;strokeWidth=1.5;" edge="1" parent="1" source="fe_svc" target="fe_pod2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- BE svc → BE pods -->
+        <mxCell id="e_besvc_be1" value="" style="endArrow=open;endFill=0;strokeColor=#5a8ad6;strokeWidth=1.5;" edge="1" parent="1" source="be_svc" target="be_pod1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_besvc_be2" value="" style="endArrow=open;endFill=0;strokeColor=#5a8ad6;strokeWidth=1.5;" edge="1" parent="1" source="be_svc" target="be_pod2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- BE → RDS -->
+        <mxCell id="e_be_rds" value="MySQL pool :3306&#xa;SELECT/INSERT/UPDATE/DELETE" style="endArrow=block;endFill=1;strokeColor=#006600;strokeWidth=2;fontSize=9;fontColor=#006600;" edge="1" parent="1" source="be_pod1" target="rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- BE → Redis -->
+        <mxCell id="e_be_redis" value="ioredis :6379&#xa;Cache-Aside  TTL:60s" style="endArrow=block;endFill=1;strokeColor=#006600;strokeWidth=2;fontSize=9;fontColor=#006600;" edge="1" parent="1" source="be_pod2" target="redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- EDGES — CI/CD PATH (orange, dashed) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- Developer → GitHub -->
+        <mxCell id="e_dev_gh" value="git push" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=2;dashed=1;fontSize=9;fontColor=#cc6600;" edge="1" parent="1" source="developer" target="github">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- GitHub → Jenkins -->
+        <mxCell id="e_gh_jk" value="webhook" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=2;dashed=1;fontSize=9;fontColor=#cc6600;" edge="1" parent="1" source="github" target="jenkins_ctrl">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="165" y="580" /><mxPoint x="1260" y="580" /></Array></mxGeometry>
+        </mxCell>
+        <!-- Jenkins → Agent -->
+        <mxCell id="e_jk_agent" value="spawn" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=1.5;dashed=1;fontSize=9;" edge="1" parent="1" source="jenkins_ctrl" target="jenkins_agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- Agent → ECR -->
+        <mxCell id="e_agent_ecr" value="docker build&#xa;+ push :vN / :latest" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=2;dashed=1;fontSize=9;fontColor=#cc6600;" edge="1" parent="1" source="jenkins_agent" target="ecr">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1260" y="870" /><mxPoint x="107" y="870" /></Array></mxGeometry>
+        </mxCell>
+        <!-- Agent → EKS (rollout) -->
+        <mxCell id="e_agent_eks" value="kubectl set image&#xa;+ rollout status" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=2;dashed=1;fontSize=9;fontColor=#cc6600;" edge="1" parent="1" source="jenkins_agent" target="z_ns_todo">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1350" y="760" /></Array></mxGeometry>
+        </mxCell>
+        <!-- Agent → S3 TF state -->
+        <mxCell id="e_agent_s3" value="terraform state" style="endArrow=block;endFill=1;strokeColor=#cc6600;strokeWidth=1.5;dashed=1;fontSize=9;" edge="1" parent="1" source="jenkins_agent" target="s3_tf">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1330" y="840" /><mxPoint x="282" y="840" /></Array></mxGeometry>
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- EDGES — IMAGE PULL (gray dotted) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="e_ecr_fe" value="pull image" style="endArrow=open;endFill=0;strokeColor=#999999;strokeWidth=1.5;dashed=1;fontSize=9;" edge="1" parent="1" source="ecr" target="fe_pod1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ecr_be" value="pull image" style="endArrow=open;endFill=0;strokeColor=#999999;strokeWidth=1.5;dashed=1;fontSize=9;" edge="1" parent="1" source="ecr" target="be_pod1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- EKS → CloudWatch -->
+        <mxCell id="e_eks_cw" value="control plane logs" style="endArrow=open;endFill=0;strokeColor=#999999;strokeWidth=1.5;dashed=1;fontSize=9;" edge="1" parent="1" source="z_eks" target="cloudwatch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

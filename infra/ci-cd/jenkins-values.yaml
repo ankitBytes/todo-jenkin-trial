@@ -1,7 +1,8 @@
 controller:
   # Set password at install time:
   #   --set controller.adminPassword=<your-password>
-  adminUser: "admin"
+  admin:
+    username: "admin"
 
   # Controller runs no builds — all jobs run on Kubernetes agent pods
   numExecutors: 0
@@ -18,17 +19,20 @@ controller:
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
       alb.ingress.kubernetes.io/ssl-redirect: '443'
       alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7
+      alb.ingress.kubernetes.io/healthcheck-path: /login
+      alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+      alb.ingress.kubernetes.io/success-codes: '200,302,403'
     hostName: jenkins.ankit.services
 
-  installPlugins:
-    - kubernetes:4372.v3d7dc9b_f3ea_5
-    - workflow-aggregator:600.vb_57cdd26fdd7
-    - git:5.7.0
-    - github:1.40.0
-    - amazon-ecr:1.114.vb_de7a_d1e1cb_e
-    - aws-credentials:231.v09e30bdd0016
-    - credentials-binding:687.v619cb_15e923f
-    - pipeline-stage-view:2.34
+    installPlugins:
+    - kubernetes
+    - workflow-aggregator
+    - git
+    - github
+    - amazon-ecr
+    - aws-credentials
+    - credentials-binding
+    - pipeline-stage-view
 
 serviceAccount:
   create: true
