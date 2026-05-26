@@ -104,3 +104,7 @@ output "asg_name" {
   description = "EKS node group Auto Scaling Group name"
   value       = module.asg.asg_name
 }
+
+output "secrets_manager_secret_name"  { value = module.secrets_manager.secret_name }
+output "secrets_manager_secret_arn"   { value = module.secrets_manager.secret_arn }
+output "todo_backend_irsa_role_arn"   { value = module.secrets_manager.backend_role_arn }

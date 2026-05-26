@@ -48,7 +48,7 @@ variable "availability_zones" {
 variable "eks_cluster_name" {
   description = "EKS cluster name"
   type        = string
-  default     = "todo-tf-cluster"
+  default     = "todo-tf-cluster-dev"
 }
 
 variable "eks_kubernetes_version" {
@@ -229,4 +229,17 @@ variable "asg_target_cpu_utilization" {
   description = "Target CPU utilization % for the node group ASG scaling policy"
   type        = number
   default     = 60
+}
+
+#Route53-Jenkins
+
+variable "jenkins_subdomain" {
+  description = "Subdomain for Jenkins"
+  type        = string
+  default     = "jenkins"
+}
+
+variable "jenkins_alb_name" {
+  description = "Name of the Jenkins ALB created by AWS Load Balancer Controller"
+  type        = string
 }

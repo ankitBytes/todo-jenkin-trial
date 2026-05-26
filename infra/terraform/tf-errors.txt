@@ -1,0 +1,322 @@
+module.route53.data.aws_route53_zone.main: Reading...
+data.aws_eks_cluster_auth.main: Reading...
+module.cloudwatch.aws_cloudwatch_log_group.eks_cluster: Refreshing state... [id=/aws/eks/todo-tf-cluster-dev/cluster]
+data.aws_eks_cluster.main: Reading...
+module.ecr_frontend.aws_ecr_repository.main: Refreshing state... [id=todo-frontend]
+module.cloudwatch.aws_cloudwatch_log_group.app_frontend: Refreshing state... [id=/todo/dev/frontend]
+module.ecr_backend.aws_ecr_repository.main: Refreshing state... [id=todo-backend]
+module.cloudwatch.aws_cloudwatch_log_group.app: Refreshing state... [id=/todo/dev/application]
+module.vpc.aws_vpc.main: Refreshing state... [id=vpc-0596cc6a2261e7e1d]
+data.aws_eks_cluster_auth.main: Read complete after 0s [id=todo-tf-cluster-dev]
+module.s3.aws_s3_bucket.main: Refreshing state... [id=todo-assets-dev-668076964228]
+module.cloudwatch.aws_cloudwatch_log_group.app_backend: Refreshing state... [id=/todo/dev/backend]
+data.aws_eks_cluster.main: Read complete after 2s [id=todo-tf-cluster-dev]
+data.aws_caller_identity.current: Reading...
+module.route53.data.aws_route53_zone.main: Read complete after 2s [id=Z07812883CC72HQVS0WSK]
+data.aws_caller_identity.current: Read complete after 0s [id=668076964228]
+module.ecr_frontend.aws_ecr_lifecycle_policy.main: Refreshing state... [id=todo-frontend]
+module.eks.aws_iam_role.eks_cluster: Refreshing state... [id=todo-dev-eks-cluster-role]
+module.eks.aws_iam_policy.alb_controller: Refreshing state... [id=arn:aws:iam::668076964228:policy/todo-dev-alb-controller-policy]
+module.eks.aws_iam_role.eks_node: Refreshing state... [id=todo-dev-eks-node-role]
+module.ecr_backend.aws_ecr_lifecycle_policy.main: Refreshing state... [id=todo-backend]
+module.eks.aws_iam_role_policy_attachment.eks_cluster_policy: Refreshing state... [id=todo-dev-eks-cluster-role-20260525070840983700000002]
+module.eks.aws_iam_role_policy_attachment.ecr_read: Refreshing state... [id=todo-dev-eks-node-role-20260525070841240100000004]
+module.eks.aws_iam_role_policy_attachment.cni: Refreshing state... [id=todo-dev-eks-node-role-20260525070841015900000003]
+module.eks.aws_iam_role_policy_attachment.cloudwatch_agent: Refreshing state... [id=todo-dev-eks-node-role-20260525070840939700000001]
+module.eks.aws_iam_role_policy_attachment.worker_node: Refreshing state... [id=todo-dev-eks-node-role-20260525070841332500000005]
+module.vpc.aws_internet_gateway.main: Refreshing state... [id=igw-09c1e78ff313e83ae]
+module.vpc.aws_subnet.private[0]: Refreshing state... [id=subnet-0e5f4f41da94395d3]
+module.vpc.aws_subnet.private[1]: Refreshing state... [id=subnet-069105135dc80866d]
+module.security_groups.aws_security_group.alb: Refreshing state... [id=sg-004c6f584adbb844c]
+module.vpc.aws_subnet.public[0]: Refreshing state... [id=subnet-06d0b0d91ca84ac73]
+module.vpc.aws_subnet.public[1]: Refreshing state... [id=subnet-03e376110ae87af1b]
+module.security_groups.aws_security_group.eks_node: Refreshing state... [id=sg-0ec1b8c9bd37a5c0b]
+module.s3.aws_s3_bucket_server_side_encryption_configuration.main: Refreshing state... [id=todo-assets-dev-668076964228]
+module.s3.aws_s3_bucket_lifecycle_configuration.main: Refreshing state... [id=todo-assets-dev-668076964228]
+module.s3.aws_s3_bucket_versioning.main: Refreshing state... [id=todo-assets-dev-668076964228]
+module.s3.aws_s3_bucket_public_access_block.main: Refreshing state... [id=todo-assets-dev-668076964228]
+module.vpc.aws_route_table.public: Refreshing state... [id=rtb-0d0cb5611a89350f6]
+module.vpc.aws_eip.nat: Refreshing state... [id=eipalloc-0dae232b03b7c6b4a]
+module.rds.aws_db_subnet_group.main: Refreshing state... [id=todo-dev-rds-subnet-group]
+module.eks.aws_eks_cluster.main: Refreshing state... [id=todo-tf-cluster-dev]
+module.redis.aws_elasticache_subnet_group.main: Refreshing state... [id=todo-dev-redis-subnet-group]
+module.security_groups.aws_security_group_rule.alb_to_nodes: Refreshing state... [id=sgrule-2973661644]
+module.security_groups.aws_security_group.redis: Refreshing state... [id=sg-007056ff51e714302]
+module.security_groups.aws_security_group.rds: Refreshing state... [id=sg-01e0d39b58ead73d1]
+module.eks.aws_launch_template.eks_node: Refreshing state... [id=lt-014cb94ea59a4307d]
+module.vpc.aws_route_table_association.public[1]: Refreshing state... [id=rtbassoc-0cda4384fb137b59e]
+module.vpc.aws_route_table_association.public[0]: Refreshing state... [id=rtbassoc-0570149f166f1c7cf]
+module.eks.aws_eks_addon.vpc_cni: Refreshing state... [id=todo-tf-cluster-dev:vpc-cni]
+module.eks.aws_eks_addon.kube_proxy: Refreshing state... [id=todo-tf-cluster-dev:kube-proxy]
+module.eks.aws_security_group_rule.cluster_to_nodes_kubelet: Refreshing state... [id=sgrule-793537871]
+module.eks.aws_security_group_rule.cluster_to_nodes_https: Refreshing state... [id=sgrule-3755928430]
+module.eks.aws_security_group_rule.cluster_to_nodes_ephemeral: Refreshing state... [id=sgrule-2790594511]
+module.eks.data.tls_certificate.eks: Reading...
+module.eks.aws_security_group_rule.nodes_to_cluster: Refreshing state... [id=sgrule-2065697148]
+module.vpc.aws_nat_gateway.main: Refreshing state... [id=nat-0fc661bf39c1ec260]
+module.eks.aws_eks_node_group.main: Refreshing state... [id=todo-tf-cluster-dev:todo-dev-ng]
+module.vpc.aws_route_table.private: Refreshing state... [id=rtb-0a4379af55648dfc5]
+module.rds.aws_db_instance.main: Refreshing state... [id=db-TURZHCZJVGONVDGFIXLBGDXPRQ]
+module.eks.aws_eks_addon.coredns: Refreshing state... [id=todo-tf-cluster-dev:coredns]
+module.vpc.aws_route_table_association.private[0]: Refreshing state... [id=rtbassoc-00ddbadfbc72efc2e]
+module.vpc.aws_route_table_association.private[1]: Refreshing state... [id=rtbassoc-0f360657c99b883cc]
+module.redis.aws_elasticache_replication_group.main: Refreshing state... [id=todo-redis-dev]
+module.alb.aws_lb_target_group.backend: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:668076964228:targetgroup/todo-dev-backend-tg/9e309603c0e38fae]
+module.alb.aws_lb.main: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:668076964228:loadbalancer/app/todo-dev-alb/46dc933b546fa5f1]
+module.alb.aws_lb_target_group.frontend: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:668076964228:targetgroup/todo-dev-frontend-tg/a8b3a3ac23c3df64]
+module.eks.data.tls_certificate.eks: Read complete after 1s [id=b1b539daa206035ae3c3e28288b0681fa1b462f3]
+module.eks.aws_iam_openid_connect_provider.eks: Refreshing state... [id=arn:aws:iam::668076964228:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/587AF5A15CA7EF7ACAFC93328278668F]
+module.eks.aws_iam_role.ebs_csi: Refreshing state... [id=todo-dev-ebs-csi-role]
+module.eks.aws_iam_role.alb_controller: Refreshing state... [id=todo-dev-alb-controller-role]
+aws_iam_role.jenkins: Refreshing state... [id=todo-dev-jenkins-irsa-role]
+module.eks.aws_iam_role_policy_attachment.alb_controller: Refreshing state... [id=todo-dev-alb-controller-role-20260525103125728200000003]
+aws_iam_role_policy_attachment.jenkins_ecr: Refreshing state... [id=todo-dev-jenkins-irsa-role-20260525102716525100000004]
+aws_iam_role_policy_attachment.jenkins_poweruser: Refreshing state... [id=todo-dev-jenkins-irsa-role-20260525102716543800000005]
+aws_iam_role_policy_attachment.jenkins_eks_describe: Refreshing state... [id=todo-dev-jenkins-irsa-role-20260525102716550900000006]
+aws_iam_role_policy_attachment.jenkins_iam: Refreshing state... [id=todo-dev-jenkins-irsa-role-20260525102716567000000007]
+module.eks.aws_iam_role_policy_attachment.ebs_csi: Refreshing state... [id=todo-dev-ebs-csi-role-20260525103125692700000002]
+module.eks.aws_eks_addon.ebs_csi: Refreshing state... [id=todo-tf-cluster-dev:aws-ebs-csi-driver]
+module.secrets_manager.aws_iam_role.todo_backend: Refreshing state... [id=todo-dev-todo-backend-role]
+module.secrets_manager.aws_secretsmanager_secret.app_credentials: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:668076964228:secret:todo-dev-app-credentials-ZKlekw]
+helm_release.secrets_store_csi_driver: Refreshing state... [id=secrets-store-csi-driver]
+module.asg.aws_autoscaling_policy.cpu_target_tracking: Refreshing state... [id=todo-dev-cpu-target-tracking]
+module.route53.aws_route53_record.app: Refreshing state... [id=Z07812883CC72HQVS0WSK_www.ankit.services_A]
+module.alb.aws_lb_listener.http: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:668076964228:listener/app/todo-dev-alb/46dc933b546fa5f1/9c2720c75e44a3f7]
+module.alb.aws_lb_listener.https: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:668076964228:listener/app/todo-dev-alb/46dc933b546fa5f1/b56c46c238f17e2d]
+module.alb.aws_lb_listener_rule.backend_api: Refreshing state... [id=arn:aws:elasticloadbalancing:us-east-1:668076964228:listener-rule/app/todo-dev-alb/46dc933b546fa5f1/b56c46c238f17e2d/ffaf6e3f19a1489e]
+module.secrets_manager.aws_iam_policy.secrets_reader: Refreshing state... [id=arn:aws:iam::668076964228:policy/todo-dev-secrets-reader-policy]
+module.secrets_manager.aws_secretsmanager_secret_version.app_credentials: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:668076964228:secret:todo-dev-app-credentials-ZKlekw|terraform-20260525103219362500000006]
+module.secrets_manager.aws_iam_role_policy_attachment.todo_backend_secrets: Refreshing state... [id=todo-dev-todo-backend-role-20260525103220682900000007]
+helm_release.aws_secrets_manager_csi_provider: Refreshing state... [id=secrets-store-csi-driver-provider-aws]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+-/+ destroy and then create replacement
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # module.asg.data.aws_autoscaling_groups.eks_nodes will be read during apply
+  # (depends on a resource or a module with changes pending)
+ <= data "aws_autoscaling_groups" "eks_nodes" {
+      + arns  = (known after apply)
+      + id    = (known after apply)
+      + names = (known after apply)
+
+      + filter {
+          + name   = "tag:eks:cluster-name"
+          + values = [
+              + "todo-tf-cluster-dev",
+            ]
+        }
+      + filter {
+          + name   = "tag:eks:nodegroup-name"
+          + values = [
+              + "todo-dev-ng",
+            ]
+        }
+    }
+
+  # module.asg.aws_autoscaling_policy.cpu_target_tracking must be replaced
+-/+ resource "aws_autoscaling_policy" "cpu_target_tracking" {
+      ~ arn                       = "arn:aws:autoscaling:us-east-1:668076964228:scalingPolicy:541eb810-dc54-4710-96ee-0ccea0224583:autoScalingGroupName/eks-todo-dev-ng-e2cf2f56-4f45-7c03-a09e-f0ffda81af38:policyName/todo-dev-cpu-target-tracking" -> (known after apply)
+      ~ autoscaling_group_name    = "eks-todo-dev-ng-e2cf2f56-4f45-7c03-a09e-f0ffda81af38" -> (known after apply) # forces replacement
+      - cooldown                  = 0 -> null
+      - estimated_instance_warmup = 0 -> null
+      ~ id                        = "todo-dev-cpu-target-tracking" -> (known after apply)
+      + metric_aggregation_type   = (known after apply)
+      - min_adjustment_magnitude  = 0 -> null
+        name                      = "todo-dev-cpu-target-tracking"
+      - scaling_adjustment        = 0 -> null
+        # (3 unchanged attributes hidden)
+
+        # (1 unchanged block hidden)
+    }
+
+  # module.autoscalling.aws_iam_policy.cluster_autoscaler will be created
+  + resource "aws_iam_policy" "cluster_autoscaler" {
+      + arn              = (known after apply)
+      + attachment_count = (known after apply)
+      + description      = "Allows Cluster Autoscaler to describe and scale EKS node group ASGs"
+      + id               = (known after apply)
+      + name             = "todo-dev-cluster-autoscaler"
+      + name_prefix      = (known after apply)
+      + path             = "/"
+      + policy           = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "autoscaling:DescribeAutoScalingGroups",
+                          + "autoscaling:DescribeAutoScalingInstances",
+                          + "autoscaling:DescribeLaunchConfigurations",
+                          + "autoscaling:DescribeScalingActivities",
+                          + "autoscaling:DescribeTags",
+                          + "autoscaling:SetDesiredCapacity",
+                          + "autoscaling:TerminateInstanceInAutoScalingGroup",
+                          + "ec2:DescribeLaunchTemplateVersions",
+                          + "ec2:DescribeInstanceTypes",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + policy_id        = (known after apply)
+      + tags_all         = {
+          + "Environment" = "dev"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "todo"
+        }
+    }
+
+  # module.autoscalling.aws_iam_role.cluster_autoscaler will be created
+  + resource "aws_iam_role" "cluster_autoscaler" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRoleWithWebIdentity"
+                      + Condition = {
+                          + StringEquals = {
+                              + "oidc.eks.us-east-1.amazonaws.com/id/587AF5A15CA7EF7ACAFC93328278668F:aud" = "sts.amazonaws.com"
+                              + "oidc.eks.us-east-1.amazonaws.com/id/587AF5A15CA7EF7ACAFC93328278668F:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Federated = "arn:aws:iam::668076964228:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/587AF5A15CA7EF7ACAFC93328278668F"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "todo-dev-cluster-autoscaler-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags_all              = {
+          + "Environment" = "dev"
+          + "ManagedBy"   = "Terraform"
+          + "Project"     = "todo"
+        }
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # module.autoscalling.aws_iam_role_policy_attachment.cluster_autoscaler will be created
+  + resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+      + id         = (known after apply)
+      + policy_arn = (known after apply)
+      + role       = "todo-dev-cluster-autoscaler-role"
+    }
+
+  # module.eks.aws_eks_node_group.main will be updated in-place
+  ~ resource "aws_eks_node_group" "main" {
+        id                     = "todo-tf-cluster-dev:todo-dev-ng"
+        tags                   = {
+            "Name"                                          = "todo-dev-ng"
+            "k8s.io/cluster-autoscaler/enabled"             = "true"
+            "k8s.io/cluster-autoscaler/todo-tf-cluster-dev" = "owned"
+        }
+        # (16 unchanged attributes hidden)
+
+      ~ launch_template {
+            id      = "lt-014cb94ea59a4307d"
+            name    = "todo-dev-node-20260525070339201000000001"
+          ~ version = "1" -> "$Latest"
+        }
+
+        # (2 unchanged blocks hidden)
+    }
+
+  # module.eks.aws_security_group_rule.cluster_to_nodes_ephemeral will be created
+  + resource "aws_security_group_rule" "cluster_to_nodes_ephemeral" {
+      + description              = "Control plane to node ephemeral ports"
+      + from_port                = 1025
+      + id                       = (known after apply)
+      + protocol                 = "tcp"
+      + security_group_id        = "sg-0ec1b8c9bd37a5c0b"
+      + security_group_rule_id   = (known after apply)
+      + self                     = false
+      + source_security_group_id = "sg-00a04d65d42e3e97f"
+      + to_port                  = 65535
+      + type                     = "ingress"
+    }
+
+  # module.eks.aws_security_group_rule.cluster_to_nodes_https will be created
+  + resource "aws_security_group_rule" "cluster_to_nodes_https" {
+      + description              = "Control plane to node HTTPS (admission webhooks)"
+      + from_port                = 443
+      + id                       = (known after apply)
+      + protocol                 = "tcp"
+      + security_group_id        = "sg-0ec1b8c9bd37a5c0b"
+      + security_group_rule_id   = (known after apply)
+      + self                     = false
+      + source_security_group_id = "sg-00a04d65d42e3e97f"
+      + to_port                  = 443
+      + type                     = "ingress"
+    }
+
+  # module.eks.aws_security_group_rule.cluster_to_nodes_kubelet will be created
+  + resource "aws_security_group_rule" "cluster_to_nodes_kubelet" {
+      + description              = "Control plane to node kubelet (exec/logs/port-forward)"
+      + from_port                = 10250
+      + id                       = (known after apply)
+      + protocol                 = "tcp"
+      + security_group_id        = "sg-0ec1b8c9bd37a5c0b"
+      + security_group_rule_id   = (known after apply)
+      + self                     = false
+      + source_security_group_id = "sg-00a04d65d42e3e97f"
+      + to_port                  = 10250
+      + type                     = "ingress"
+    }
+
+  # module.security_groups.aws_security_group.eks_node will be updated in-place
+  ~ resource "aws_security_group" "eks_node" {
+        id                     = "sg-0ec1b8c9bd37a5c0b"
+      ~ ingress                = [
+          - {
+              - cidr_blocks      = []
+              - description      = "ALB to EKS nodes on app port"
+              - from_port        = 3000
+              - ipv6_cidr_blocks = []
+              - prefix_list_ids  = []
+              - protocol         = "tcp"
+              - security_groups  = [
+                  - "sg-004c6f584adbb844c",
+                ]
+              - self             = false
+              - to_port          = 3000
+            },
+            # (1 unchanged element hidden)
+        ]
+        name                   = "todo-dev-eks-node-sg"
+        tags                   = {
+            "Name" = "todo-dev-eks-node-sg"
+        }
+        # (8 unchanged attributes hidden)
+    }
+
+Plan: 7 to add, 2 to change, 1 to destroy.
+
+Changes to Outputs:
+  ~ asg_name                    = "eks-todo-dev-ng-e2cf2f56-4f45-7c03-a09e-f0ffda81af38" -> (known after apply)
+  + cluster_autoscaler_role_arn = (known after apply)
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+Releasing state lock. This may take a few moments...

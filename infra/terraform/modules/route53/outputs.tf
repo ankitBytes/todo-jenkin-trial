@@ -12,3 +12,8 @@ output "record_fqdn" {
   description = "FQDN of the created Route53 A record"
   value       = aws_route53_record.app.fqdn
 }
+
+output "jenkins_url" {
+  description = "Jenkins URL"
+  value       = "https://${var.jenkins_subdomain}.${var.domain_name}"
+}

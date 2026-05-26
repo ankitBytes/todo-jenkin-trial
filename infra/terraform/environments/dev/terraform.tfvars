@@ -52,3 +52,6 @@ cloudwatch_log_retention_days = 14
 
 #ALB
 certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7"
+
+jenkins_subdomain = "jenkins"
+jenkins_alb_name  = "k8s-jenkins-jenkins-8be750d9ed"
