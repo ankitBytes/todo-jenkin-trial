@@ -219,8 +219,8 @@ variable "cloudwatch_log_retention_days" {
 
 variable "certificate_arn" {
   description = "ARN of the certificate generated but SSL"
-  type = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 # ── ASG ───────────────────────────────────────────────────────────────────────
@@ -239,7 +239,12 @@ variable "jenkins_subdomain" {
   default     = "jenkins"
 }
 
-variable "jenkins_alb_name" {
-  description = "Name of the Jenkins ALB created by AWS Load Balancer Controller"
+variable "jenkins_alb_dns_name" {
+  description = "DNS name of the Jenkins ALB created by AWS Load Balancer Controller"
+  type        = string
+}
+
+variable "jenkins_alb_zone_id" {
+  description = "Canonical hosted zone ID of the Jenkins ALB"
   type        = string
 }

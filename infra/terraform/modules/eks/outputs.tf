@@ -21,7 +21,7 @@ output "oidc_issuer_url" {
   value = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
 
-output "alb_controller_role_arn" { 
+output "alb_controller_role_arn" {
   description = "Annotate the aws-load-balancer-controller ServiceAccount with this ARN"
   value       = aws_iam_role.alb_controller.arn
 }

@@ -15,5 +15,5 @@ output "redis_sg_id" {
 
 output "alb_sg_id" {
   description = "Security group ID for Load Balancer"
-  value = aws_security_group.alb.id
+  value       = aws_security_group.alb.id
 }

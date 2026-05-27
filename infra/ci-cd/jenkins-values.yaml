@@ -1,6 +1,6 @@
 controller:
   # Set password at install time:
-  #   --set controller.adminPassword=<your-password>
+  #   --set controller.admin.password=<your-password>
   admin:
     username: "admin"
 
@@ -24,15 +24,18 @@ controller:
       alb.ingress.kubernetes.io/success-codes: '200,302,403'
     hostName: jenkins.ankit.services
 
+  # Internal URL used by agent pods to connect back — avoids ALB hairpin issues
+  jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080"
+
   installPlugins:
-   - kubernetes
-   - workflow-aggregator
-   - git
-   - github
-   - amazon-ecr
-   - aws-credentials
-   - credentials-binding
-   - pipeline-stage-view
+    - kubernetes
+    - workflow-aggregator
+    - git
+    - github
+    - amazon-ecr
+    - aws-credentials
+    - credentials-binding
+    - pipeline-stage-view
 
 serviceAccount:
   create: true
@@ -48,6 +51,10 @@ persistence:
 
 agent:
   enabled: true
+  customJenkinsLabels:
+    - jenkins-agent
+  serviceAccount: jenkins
+  websocket: true
   # Custom image built from app/docker/Dockerfile.jenkins-agent and pushed to ECR
   image:
     repository: 668076964228.dkr.ecr.us-east-1.amazonaws.com/jenkins-agent
@@ -75,3 +82,7 @@ agent:
       volumes:
       - name: docker-graph
         emptyDir: {}
+
+serviceAccountAgent:
+  create: false
+  name: jenkins

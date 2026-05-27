@@ -18,8 +18,8 @@ eks_node_min_size       = 2
 eks_node_max_size       = 6
 
 # ── ECR ───────────────────────────────────────────────────────────────────────
-ecr_frontend_repo_name = "todo-frontend"
-ecr_backend_repo_name  = "todo-backend"
+ecr_frontend_repo_name    = "todo-frontend"
+ecr_backend_repo_name     = "todo-backend"
 ecr_image_retention_count = 10
 
 # ── RDS ───────────────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ rds_identifier            = "todo-db"
 rds_instance_class        = "db.t3.small"
 rds_db_name               = "todo_db"
 rds_username              = "todo_user"
-rds_password              = "CHANGE_ME_use_secrets_manager"   # use: export TF_VAR_rds_password=...
+rds_password              = "CHANGE_ME_use_secrets_manager" # use: export TF_VAR_rds_password=...
 rds_allocated_storage     = 50
 rds_backup_retention_days = 7
 rds_multi_az              = true

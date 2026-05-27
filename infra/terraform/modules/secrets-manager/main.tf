@@ -7,7 +7,7 @@ resource "aws_secretsmanager_secret" "app_credentials" {
   name                    = local.secret_name
   description             = "DB and Redis credentials for ${local.name}"
   recovery_window_in_days = 0
-  tags = { Name = local.secret_name }
+  tags                    = { Name = local.secret_name }
 }
 
 resource "aws_secretsmanager_secret_version" "app_credentials" {

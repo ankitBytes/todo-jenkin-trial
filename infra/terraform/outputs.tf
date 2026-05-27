@@ -70,6 +70,11 @@ output "app_url" {
   value       = "https://${var.subdomain}.${var.domain_name}"
 }
 
+output "apex_app_url" {
+  description = "Application apex URL"
+  value       = "https://${var.domain_name}"
+}
+
 output "alb_arn" {
   description = "ALB ARN"
   value       = module.alb.alb_arn
@@ -105,6 +110,6 @@ output "asg_name" {
   value       = module.asg.asg_name
 }
 
-output "secrets_manager_secret_name"  { value = module.secrets_manager.secret_name }
-output "secrets_manager_secret_arn"   { value = module.secrets_manager.secret_arn }
-output "todo_backend_irsa_role_arn"   { value = module.secrets_manager.backend_role_arn }
+output "secrets_manager_secret_name" { value = module.secrets_manager.secret_name }
+output "secrets_manager_secret_arn" { value = module.secrets_manager.secret_arn }
+output "todo_backend_irsa_role_arn" { value = module.secrets_manager.backend_role_arn }

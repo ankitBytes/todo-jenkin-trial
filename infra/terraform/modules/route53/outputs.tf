@@ -8,6 +8,11 @@ output "app_fqdn" {
   value       = "${var.subdomain}.${var.domain_name}"
 }
 
+output "apex_record_fqdn" {
+  description = "FQDN of the created apex Route53 A record"
+  value       = aws_route53_record.apex.fqdn
+}
+
 output "record_fqdn" {
   description = "FQDN of the created Route53 A record"
   value       = aws_route53_record.app.fqdn

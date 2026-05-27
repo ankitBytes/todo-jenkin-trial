@@ -162,19 +162,19 @@ module "route53" {
   alb_zone_id  = module.alb.alb_zone_id
 
   jenkins_subdomain    = var.jenkins_subdomain
-  jenkins_alb_dns_name = data.aws_lb.jenkins.dns_name
-  jenkins_alb_zone_id  = data.aws_lb.jenkins.zone_id
+  jenkins_alb_dns_name = var.jenkins_alb_dns_name
+  jenkins_alb_zone_id  = var.jenkins_alb_zone_id
 }
 
 module "alb" {
   source = "./modules/alb"
 
-  project_name = var.project_name
-  environment = var.environment
+  project_name      = var.project_name
+  environment       = var.environment
   public_subnet_ids = module.vpc.public_subnet_ids
-  alb_sg_id = module.security_groups.alb_sg_id
-  vpc_id = module.vpc.vpc_id
-  certificate_arn = var.certificate_arn
+  alb_sg_id         = module.security_groups.alb_sg_id
+  vpc_id            = module.vpc.vpc_id
+  certificate_arn   = var.certificate_arn
 
   depends_on = [module.security_groups, module.vpc]
 }
@@ -202,8 +202,4 @@ module "autoscalling" {
   oidc_issuer_host  = module.eks.oidc_issuer_host
 
   depends_on = [module.eks]
-}
-
-data "aws_lb" "jenkins" {
-  name = var.jenkins_alb_name
 }

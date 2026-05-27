@@ -33,7 +33,7 @@ resource "aws_eks_cluster" "main" {
   vpc_config {
     subnet_ids              = var.private_subnet_ids
     endpoint_private_access = true
-    endpoint_public_access  = true 
+    endpoint_public_access  = true
   }
 
   # Logs are received by the pre-created CloudWatch log group /aws/eks/<name>/cluster
@@ -98,6 +98,26 @@ resource "aws_launch_template" "eks_node" {
   name_prefix = "${local.name}-node-"
 
   vpc_security_group_ids = [var.node_security_group_id]
+
+  # Raise maxPods to benefit from VPC CNI prefix delegation (ENABLE_PREFIX_DELEGATION=true).
+  # AL2023 nodes use nodeadm; this MIME doc merges with EKS bootstrap at launch.
+  user_data = base64encode(<<-EOT
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary="//"
+
+    --//
+    Content-Type: application/node.eks.aws
+
+    ---
+    apiVersion: node.eks.aws/v1alpha1
+    kind: NodeConfig
+    spec:
+      kubelet:
+        config:
+          maxPods: 110
+    --//--
+  EOT
+  )
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -208,31 +228,31 @@ resource "aws_eks_node_group" "main" {
   }
 
   tags = {
-    Name                                                = "${local.name}-ng"
-    "k8s.io/cluster-autoscaler/${var.cluster_name}"     = "owned"
-    "k8s.io/cluster-autoscaler/enabled"                 = "true"
+    Name                                            = "${local.name}-ng"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
   }
 }
 
 # ── EKS Addons ────────────────────────────────────────────────────────────────
 
 resource "aws_eks_addon" "vpc_cni" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "vpc-cni"
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "vpc-cni"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 }
 
 resource "aws_eks_addon" "kube_proxy" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "kube-proxy"
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "kube-proxy"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 }
 
 resource "aws_eks_addon" "coredns" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "coredns"
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "coredns"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
@@ -240,9 +260,9 @@ resource "aws_eks_addon" "coredns" {
 }
 
 resource "aws_eks_addon" "ebs_csi" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "aws-ebs-csi-driver"
-  service_account_role_arn = aws_iam_role.ebs_csi.arn
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "aws-ebs-csi-driver"
+  service_account_role_arn    = aws_iam_role.ebs_csi.arn
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 

@@ -1,9 +1,9 @@
-variable "project_name"      { type = string }
-variable "environment"       { type = string }
-variable "aws_region"        { type = string }
-variable "account_id"        { type = string }
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "aws_region" { type = string }
+variable "account_id" { type = string }
 variable "oidc_provider_arn" { type = string }
-variable "oidc_issuer_host"  { type = string }
+variable "oidc_issuer_host" { type = string }
 
 variable "namespace" {
   type    = string

@@ -18,8 +18,8 @@ eks_node_min_size       = 1
 eks_node_max_size       = 3
 
 #ECR
-ecr_frontend_repo_name = "todo-frontend"
-ecr_backend_repo_name  = "todo-backend"
+ecr_frontend_repo_name    = "todo-frontend"
+ecr_backend_repo_name     = "todo-backend"
 ecr_image_retention_count = 5
 
 #RDS
@@ -27,7 +27,7 @@ rds_identifier            = "todo-db-dev"
 rds_instance_class        = "db.t3.micro"
 rds_db_name               = "todo_db"
 rds_username              = "todo_user"
-rds_password              = "CHANGE_ME_before_apply"   # use: export TF_VAR_rds_password=...
+rds_password              = "CHANGE_ME_before_apply" # use: export TF_VAR_rds_password=...
 rds_allocated_storage     = 20
 rds_backup_retention_days = 3
 rds_multi_az              = false
@@ -53,5 +53,6 @@ cloudwatch_log_retention_days = 14
 #ALB
 certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7"
 
-jenkins_subdomain = "jenkins"
-jenkins_alb_name  = "k8s-jenkins-jenkins-8be750d9ed"
+jenkins_subdomain    = "jenkins"
+jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.amazonaws.com"
+jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
