@@ -7,7 +7,7 @@ spec:
   serviceRef:
     name: todo-frontend-svc
     port: 80
-  targetGroupARN: arn:aws:elasticloadbalancing:us-east-1:668076964228:targetgroup/todo-dev-frontend-tg/a8b3a3ac23c3df64
+  targetGroupARN: __FRONTEND_TG_ARN__
   targetType: ip
 
 ---
@@ -21,5 +21,5 @@ spec:
   serviceRef:
     name: todo-backend-svc
     port: 80
-  targetGroupARN: arn:aws:elasticloadbalancing:us-east-1:668076964228:targetgroup/todo-dev-backend-tg/9e309603c0e38fae
+  targetGroupARN: __BACKEND_TG_ARN__
   targetType: ip

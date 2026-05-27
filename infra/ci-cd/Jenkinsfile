@@ -168,6 +168,37 @@ pipeline {
                 }
             }
         }
+        stage('Apply K8s Manifests') {
+            when {
+                anyOf {
+                    changeset 'infra/**'
+                    changeset 'app/k8s/**'
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh """
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+
+                        FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
+                        BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
+                        BACKEND_IRSA_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw todo_backend_irsa_role_arn)
+                        SECRET_NAME=\$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
+
+                        sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \
+                            -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \
+                            app/k8s/targetgroupbinding.yaml | kubectl apply -f -
+
+                        sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \
+                            app/k8s/serviceaccount.yaml | kubectl apply -f -
+
+                        sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
+                            app/k8s/secretproviderclass.yaml | kubectl apply -f -
+                    """
+                }
+            }
+        }
 
         // ── Cleanup ─────────────────────────────────────────────────────────
         stage('Cleanup') {
