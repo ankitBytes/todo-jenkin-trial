@@ -46,28 +46,34 @@ pipeline {
                         stage('Push Frontend') {
                             when { changeset 'app/frontend/**' }
                             steps {
-                                sh """
-                                    aws ecr get-login-password --region ${AWS_REGION} | \\
-                                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                                    docker push ${ECR_FRONTEND}:${IMAGE_TAG}
-                                    docker tag ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
-                                    docker push ${ECR_FRONTEND}:latest
-                                """
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws ecr get-login-password --region ${AWS_REGION} | \\
+                                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                                        docker push ${ECR_FRONTEND}:${IMAGE_TAG}
+                                        docker tag ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
+                                        docker push ${ECR_FRONTEND}:latest
+                                    """
+                                }
                             }
                         }
                         stage('Deploy Frontend') {
                             when { changeset 'app/frontend/**' }
                             steps {
-                                sh """
-                                    aws eks update-kubeconfig \\
-                                        --region ${AWS_REGION} --name ${EKS_CLUSTER}
-                                    kubectl set image deployment/todo-frontend \\
-                                        todo-frontend=${ECR_FRONTEND}:${IMAGE_TAG} \\
-                                        -n ${KUBE_NS}
-                                    kubectl rollout status deployment/todo-frontend \\
-                                        -n ${KUBE_NS} --timeout=180s \\
-                                    || (kubectl rollout undo deployment/todo-frontend -n ${KUBE_NS} && exit 1)
-                                """
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws eks update-kubeconfig \\
+                                            --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                                        kubectl set image deployment/todo-frontend \\
+                                            todo-frontend=${ECR_FRONTEND}:${IMAGE_TAG} \\
+                                            -n ${KUBE_NS}
+                                        kubectl rollout status deployment/todo-frontend \\
+                                            -n ${KUBE_NS} --timeout=180s \\
+                                        || (kubectl rollout undo deployment/todo-frontend -n ${KUBE_NS} && exit 1)
+                                    """
+                                }
                             }
                         }
                     }
@@ -89,28 +95,34 @@ pipeline {
                         stage('Push Backend') {
                             when { changeset 'app/backend/**' }
                             steps {
-                                sh """
-                                    aws ecr get-login-password --region ${AWS_REGION} | \\
-                                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                                    docker push ${ECR_BACKEND}:${IMAGE_TAG}
-                                    docker tag ${ECR_BACKEND}:${IMAGE_TAG} ${ECR_BACKEND}:latest
-                                    docker push ${ECR_BACKEND}:latest
-                                """
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws ecr get-login-password --region ${AWS_REGION} | \\
+                                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                                        docker push ${ECR_BACKEND}:${IMAGE_TAG}
+                                        docker tag ${ECR_BACKEND}:${IMAGE_TAG} ${ECR_BACKEND}:latest
+                                        docker push ${ECR_BACKEND}:latest
+                                    """
+                                }
                             }
                         }
                         stage('Deploy Backend') {
                             when { changeset 'app/backend/**' }
                             steps {
-                                sh """
-                                    aws eks update-kubeconfig \\
-                                        --region ${AWS_REGION} --name ${EKS_CLUSTER}
-                                    kubectl set image deployment/todo-backend \\
-                                        todo-backend=${ECR_BACKEND}:${IMAGE_TAG} \\
-                                        -n ${KUBE_NS}
-                                    kubectl rollout status deployment/todo-backend \\
-                                        -n ${KUBE_NS} --timeout=180s \\
-                                    || (kubectl rollout undo deployment/todo-backend -n ${KUBE_NS} && exit 1)
-                                """
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws eks update-kubeconfig \\
+                                            --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                                        kubectl set image deployment/todo-backend \\
+                                            todo-backend=${ECR_BACKEND}:${IMAGE_TAG} \\
+                                            -n ${KUBE_NS}
+                                        kubectl rollout status deployment/todo-backend \\
+                                            -n ${KUBE_NS} --timeout=180s \\
+                                        || (kubectl rollout undo deployment/todo-backend -n ${KUBE_NS} && exit 1)
+                                    """
+                                }
                             }
                         }
                     }
