@@ -17,7 +17,14 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+                // Wait for DinD daemon to be ready before any Docker commands
+                retry(15) {
+                    sleep(time: 3, unit: 'SECONDS')
+                    sh 'docker info > /dev/null 2>&1'
+                }
+            }
         }
 
         // ── App stages run in parallel ──────────────────────────────────────
