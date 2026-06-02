@@ -49,3 +49,10 @@ s3_bucket_name = "todo-assets-prod-668076964228"
 
 # ── CloudWatch ────────────────────────────────────────────────────────────────
 cloudwatch_log_retention_days = 30
+
+# ── ALB ───────────────────────────────────────────────────────────────────────
+certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7"
+
+# ── Jenkins (shared, same as dev) ─────────────────────────────────────────────
+jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.amazonaws.com"
+jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"

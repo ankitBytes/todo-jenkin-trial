@@ -46,7 +46,7 @@ environment {
 ## Pipeline Structure
 
 ```
-Checkout
+Checkout  (+ DinD daemon readiness check)
     │
     ├─────────────────────────────────────────────┐
     │                                             │
@@ -62,6 +62,8 @@ Terraform Validate (if infra/** changed)
 Terraform Plan     (if infra/** changed)
 Terraform Apply    (if infra/** changed)
     │
+Apply K8s Manifests  (if infra/** OR app/k8s/** changed)
+    │
 Cleanup
 ```
 
@@ -73,11 +75,20 @@ Cleanup
 
 ```groovy
 stage('Checkout') {
-    steps { checkout scm }
+    steps {
+        checkout scm
+        // Wait for DinD daemon to be ready before any Docker commands
+        retry(15) {
+            sleep(time: 3, unit: 'SECONDS')
+            sh 'docker info > /dev/null 2>&1'
+        }
+    }
 }
 ```
 
 Clones the repository at the commit that triggered the pipeline. `scm` refers to the source control configuration set in the Jenkins job.
+
+After checkout, the pipeline waits for the Docker-in-Docker sidecar daemon to be ready before any stage tries to run `docker build`. The agent pod's DinD container can take a few seconds to initialise after the pod starts. Without this check, the first `docker build` call would fail with `"Cannot connect to the Docker daemon"`. The `retry(15)` block polls every 3 seconds for up to 45 seconds — enough time for DinD to come up on any reasonably-sized node.
 
 ---
 
@@ -95,12 +106,14 @@ when { changeset 'app/frontend/**' }
 
 **Why this matters:** If you push a change to only the backend (`app/backend/`), Jenkins skips all three frontend stages entirely — no unnecessary image rebuild, no unnecessary deployment.
 
-| Push changes to... | Frontend stages | Backend stages | Terraform stages |
-|--------------------|----------------|----------------|-----------------|
-| `app/frontend/` | Run | Skip | Skip |
-| `app/backend/` | Skip | Run | Skip |
-| `infra/` | Skip | Skip | Run |
-| `app/frontend/` + `app/backend/` | Run | Run | Skip |
+| Push changes to... | Frontend stages | Backend stages | Terraform stages | Apply K8s Manifests |
+|--------------------|----------------|----------------|-----------------|---------------------|
+| `app/frontend/` | Run | Skip | Skip | Skip |
+| `app/backend/` | Skip | Run | Skip | Skip |
+| `infra/` | Skip | Skip | Run | Run |
+| `app/k8s/` | Skip | Skip | Skip | Run |
+| `app/frontend/` + `app/backend/` | Run | Run | Skip | Skip |
+| `infra/` + `app/k8s/` | Skip | Skip | Run | Run |
 
 #### Build Frontend
 
@@ -120,30 +133,36 @@ sh """
 #### Push Frontend
 
 ```groovy
-sh """
-    aws ecr get-login-password --region ${AWS_REGION} | \
-        docker login --username AWS --password-stdin ${ECR_REGISTRY}
-    docker push ${ECR_FRONTEND}:${IMAGE_TAG}
-    docker tag  ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
-    docker push ${ECR_FRONTEND}:latest
-"""
+withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                  credentialsId: 'aws-creds']]) {
+    sh """
+        aws ecr get-login-password --region ${AWS_REGION} | \
+            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+        docker push ${ECR_FRONTEND}:${IMAGE_TAG}
+        docker tag  ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
+        docker push ${ECR_FRONTEND}:latest
+    """
+}
 ```
 
-ECR tokens expire after 12 hours, so the pipeline logs in fresh every run. The image is pushed twice: once with the versioned tag (`v42`) and once as `latest`.
+ECR tokens expire after 12 hours, so the pipeline logs in fresh every run. The image is pushed twice: once with the versioned tag (`v42`) and once as `latest`. The entire block is wrapped in `withCredentials` so the `aws ecr get-login-password` call has valid IAM credentials — the same `aws-creds` credential used by the Terraform stages.
 
 #### Deploy Frontend
 
 ```groovy
-sh """
-    aws eks update-kubeconfig \
-        --region ${AWS_REGION} --name ${EKS_CLUSTER}
-    kubectl set image deployment/todo-frontend \
-        todo-frontend=${ECR_FRONTEND}:${IMAGE_TAG} \
-        -n ${KUBE_NS}
-    kubectl rollout status deployment/todo-frontend \
-        -n ${KUBE_NS} --timeout=180s \
-    || (kubectl rollout undo deployment/todo-frontend -n ${KUBE_NS} && exit 1)
-"""
+withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                  credentialsId: 'aws-creds']]) {
+    sh """
+        aws eks update-kubeconfig \
+            --region ${AWS_REGION} --name ${EKS_CLUSTER}
+        kubectl set image deployment/todo-frontend \
+            todo-frontend=${ECR_FRONTEND}:${IMAGE_TAG} \
+            -n ${KUBE_NS}
+        kubectl rollout status deployment/todo-frontend \
+            -n ${KUBE_NS} --timeout=180s \
+        || (kubectl rollout undo deployment/todo-frontend -n ${KUBE_NS} && exit 1)
+    """
+}
 ```
 
 **How the rollout works:**
@@ -159,7 +178,7 @@ This is an **automatic rollback** — no manual intervention needed if the new i
 
 ---
 
-### Stages 3–6 — Terraform (Infrastructure)
+### Stages 3–6 — Terraform (Infrastructure Changes)
 
 These stages only run when files under `infra/` change.
 
@@ -214,7 +233,71 @@ stage('Approve Terraform Apply') {
 
 ---
 
-### Stage 7 — Cleanup
+### Stage 7 — Apply K8s Manifests
+
+```groovy
+stage('Apply K8s Manifests') {
+    when {
+        anyOf {
+            changeset 'infra/**'
+            changeset 'app/k8s/**'
+        }
+    }
+    steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                          credentialsId: 'aws-creds']]) {
+            sh """
+                aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+
+                FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
+                BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
+                BACKEND_IRSA_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw todo_backend_irsa_role_arn)
+                SECRET_NAME=\$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
+
+                sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \
+                    -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \
+                    app/k8s/targetgroupbinding.yaml | kubectl apply -f -
+
+                sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \
+                    app/k8s/serviceaccount.yaml | kubectl apply -f -
+
+                sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
+                    app/k8s/secretproviderclass.yaml | kubectl apply -f -
+            """
+        }
+    }
+}
+```
+
+This stage solves the problem of Kubernetes manifests that reference AWS resource ARNs which are only known after Terraform runs. Rather than manually editing manifest files after every `terraform apply`, the manifests store placeholder tokens and the pipeline injects the real values at deploy time using `sed`.
+
+**When it runs:** any change under `infra/` (Terraform resources changed, so ARNs may have changed) or `app/k8s/` (manifest templates were edited).
+
+**What it does — step by step:**
+
+1. Configures `kubectl` to reach the EKS cluster
+2. Reads four values from Terraform output at pipeline time:
+
+| Terraform output | Used in manifest |
+|---|---|
+| `frontend_tg_arn` | `targetgroupbinding.yaml` — ALB target group for frontend pods |
+| `backend_tg_arn` | `targetgroupbinding.yaml` — ALB target group for backend pods |
+| `todo_backend_irsa_role_arn` | `serviceaccount.yaml` — IAM role the backend pod assumes |
+| `secrets_manager_secret_name` | `secretproviderclass.yaml` — which Secrets Manager secret to mount |
+
+3. Applies each manifest after substituting the placeholder tokens:
+
+| Manifest | Placeholder(s) replaced |
+|---|---|
+| `targetgroupbinding.yaml` | `__FRONTEND_TG_ARN__`, `__BACKEND_TG_ARN__` |
+| `serviceaccount.yaml` | `__BACKEND_IRSA_ROLE_ARN__` |
+| `secretproviderclass.yaml` | `__SECRET_NAME__` |
+
+**Why this approach matters:** These three manifests contain AWS ARNs that are account- and environment-specific. Hardcoding them means the repo can't be cloned and deployed to a fresh account without manual edits. Using `__PLACEHOLDER__` tokens keeps the manifests portable — Terraform always knows the correct values, and the pipeline bridges the two systems automatically. No one needs to copy-paste ARNs by hand after an infrastructure change.
+
+---
+
+### Stage 8 — Cleanup
 
 ```groovy
 sh """
@@ -253,13 +336,16 @@ post {
 
 ### 1. Jenkins Credentials
 
-The pipeline requires one credential stored in Jenkins (Manage Jenkins → Credentials):
+The pipeline requires two credentials stored in Jenkins (Manage Jenkins → Credentials → Global):
 
-| ID | Type | Contents |
-|----|------|---------|
-| `aws-creds` | AWS Credentials | IAM access key + secret key |
+| ID | Type | Used in | Contents |
+|----|------|---------|---------|
+| `aws-creds` | AWS Credentials | Push, Deploy, and all Terraform stages | IAM access key + secret key |
+| `rds-password` | Secret text | `environment { TF_VAR_rds_password }` | RDS master password, passed to Terraform as a variable |
 
-The IAM user/role needs permissions for: ECR (push/pull), EKS (update-kubeconfig, kubectl), and Terraform (full AWS access or scoped to the resources it manages).
+The `aws-creds` IAM user/role needs permissions for: ECR (push/pull), EKS (update-kubeconfig, kubectl), S3 (Terraform state), and the full set of Terraform-managed resources.
+
+The `rds-password` credential is injected as `TF_VAR_rds_password` at the top of the pipeline so Terraform can pass it to the RDS module without the password ever appearing in `.tfvars` files or pipeline logs.
 
 ### 2. Required Plugins
 
@@ -292,24 +378,47 @@ GitHub/GitLab notifies Jenkins (webhook)
 Jenkins reads Jenkinsfile
     │
     ▼
-Checkout stage pulls latest commit
+Checkout stage pulls latest commit + waits for DinD daemon ready
     │
     ▼
 changeset 'app/backend/**' matches? YES
     │
     ▼
 Build Backend:  docker build → image tagged v43
-Push Backend:   ECR login → docker push v43 + latest
-Deploy Backend: kubectl set image → rolling update starts
+Push Backend:   (withCredentials: aws-creds) ECR login → docker push v43 + latest
+Deploy Backend: (withCredentials: aws-creds) kubectl set image → rolling update starts
                 kubectl rollout status waits 180s
-                    ├── SUCCESS → pipeline continues to Cleanup
+                    ├── SUCCESS → pipeline continues
                     └── FAIL   → kubectl rollout undo (v42 restored) + pipeline fails
+    │
+    ▼
+changeset 'infra/**' matches? NO → Apply K8s Manifests skipped
     │
     ▼
 Cleanup: docker rmi local images
     │
     ▼
 post { success } or post { failure }
+```
+
+**Infrastructure + manifest change (e.g., after `terraform apply`):**
+
+```
+changeset 'infra/**' matches? YES
+    │
+    ▼
+Terraform Init → Validate → Plan → Apply  (all withCredentials: aws-creds)
+    │
+    ▼
+Apply K8s Manifests:
+    Read terraform output → frontend_tg_arn, backend_tg_arn,
+                            todo_backend_irsa_role_arn, secrets_manager_secret_name
+    sed-inject ARNs into targetgroupbinding.yaml → kubectl apply
+    sed-inject role ARN into serviceaccount.yaml  → kubectl apply
+    sed-inject secret name into secretproviderclass.yaml → kubectl apply
+    │
+    ▼
+Cleanup
 ```
 
 ![End-to-End CI/CD Flow](diagrams/End-to-End%20CICD%20Flow-2026-05-19-085645.png)
