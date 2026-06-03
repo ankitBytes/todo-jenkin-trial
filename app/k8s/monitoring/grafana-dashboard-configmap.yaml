@@ -8,7 +8,7 @@ metadata:
 data:
   todo-app.json: |
     {
-      "title": "Todo App",
+      "title": "Todo App Dev",
       "uid": "todo-app",
       "schemaVersion": 36,
       "refresh": "30s",
