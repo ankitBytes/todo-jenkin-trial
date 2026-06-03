@@ -1,3 +1,30 @@
+resource "random_password" "rds" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+resource "random_password" "grafana" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+resource "aws_secretsmanager_secret" "infra_passwords" {
+  name                    = "${var.project_name}-${var.environment}-infra-passwords"
+  description             = "Auto-generated admin passwords for ${var.project_name}-${var.environment}"
+  recovery_window_in_days = 0
+  tags                    = { Name = "${var.project_name}-${var.environment}-infra-passwords" }
+}
+
+resource "aws_secretsmanager_secret_version" "infra_passwords" {
+  secret_id = aws_secretsmanager_secret.infra_passwords.id
+  secret_string = jsonencode({
+    rds_password           = random_password.rds.result
+    grafana_admin_password = random_password.grafana.result
+  })
+}
+
 module "vpc" {
   source = "./modules/vpc"
 
@@ -99,7 +126,7 @@ module "rds" {
   instance_class      = var.rds_instance_class
   db_name             = var.rds_db_name
   username            = var.rds_username
-  password            = var.rds_password
+  password            = random_password.rds.result
   allocated_storage   = var.rds_allocated_storage
   backup_retention    = var.rds_backup_retention_days
   multi_az            = var.rds_multi_az
@@ -135,7 +162,7 @@ module "secrets_manager" {
   db_host     = module.rds.address
   db_port     = "3306"
   db_user     = var.rds_username
-  db_password = var.rds_password
+  db_password = random_password.rds.result
   db_name     = var.rds_db_name
   redis_host  = module.redis.primary_endpoint
   redis_port  = "6379"
@@ -221,7 +248,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
   set {
     name  = "grafana.adminPassword"
-    value = var.grafana_admin_password
+    value = random_password.grafana.result
   }
   set {
     name  = "grafana.ingress.enabled"

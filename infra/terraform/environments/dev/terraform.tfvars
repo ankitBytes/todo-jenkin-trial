@@ -27,7 +27,6 @@ rds_identifier            = "todo-db-dev"
 rds_instance_class        = "db.t3.micro"
 rds_db_name               = "todo_db"
 rds_username              = "todo_user"
-rds_password              = "CHANGE_ME_before_apply" # use: export TF_VAR_rds_password=...
 rds_allocated_storage     = 20
 rds_backup_retention_days = 3
 rds_multi_az              = false
@@ -58,7 +57,6 @@ jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.
 jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
 
 # Monitoring
-grafana_admin_password = "CHANGE_ME_use_env_var"
 grafana_subdomain      = "grafana"
 grafana_alb_dns_name   = "k8s-monitori-kubeprom-3ccd051ce4-1913664347.us-east-1.elb.amazonaws.com"
 grafana_alb_zone_id    = "Z35SXDOTRQ7X7K"

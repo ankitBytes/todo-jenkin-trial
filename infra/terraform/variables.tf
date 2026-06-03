@@ -124,12 +124,6 @@ variable "rds_username" {
   default     = "todo_user"
 }
 
-variable "rds_password" {
-  description = "RDS master password — use a secrets manager in production"
-  type        = string
-  sensitive   = true
-}
-
 variable "rds_allocated_storage" {
   description = "Allocated storage in GiB"
   type        = number
@@ -250,12 +244,6 @@ variable "jenkins_alb_zone_id" {
 }
 
 # ── Monitoring ────────────────────────────────────────────────────────────────
-
-variable "grafana_admin_password" {
-  description = "Initial admin password for Grafana — supply via TF_VAR_grafana_admin_password"
-  type        = string
-  sensitive   = true
-}
 
 variable "grafana_subdomain" {
   description = "Subdomain for Grafana"
