@@ -79,6 +79,34 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - backend
+    networks:
+      - todo-network
+    restart: on-failure
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DATASOURCES_DEFAULT_TYPE: prometheus
+      GF_DATASOURCES_DEFAULT_URL: "http://prometheus:9090"
+    depends_on:
+      - prometheus
+    networks:
+      - todo-network
+    restart: on-failure
+
 # ── Shared network ─────────────────────────────────────────────────────────────
 networks:
   todo-network:

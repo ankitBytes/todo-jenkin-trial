@@ -12,7 +12,8 @@ pipeline {
         IMAGE_TAG       = "v${BUILD_NUMBER}"
         KUBE_NS         = 'todo'
         TF_DIR          = 'infra/terraform'
-        TF_VAR_rds_password = credentials('rds-password')
+        TF_VAR_rds_password           = credentials('rds-password')
+        TF_VAR_grafana_admin_password = credentials('grafana-admin-password')
     }
 
     stages {
@@ -195,6 +196,8 @@ pipeline {
 
                         sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
                             app/k8s/secretproviderclass.yaml | kubectl apply -f -
+
+                        kubectl apply -f app/k8s/monitoring/
                     """
                 }
             }

@@ -42,7 +42,7 @@ redis_num_cache_nodes = 1
 
 #Route53
 domain_name = "ankit.services"
-subdomain   = "www"
+subdomain   = "dev"
 
 #S3
 s3_bucket_name = "todo-assets-dev-668076964228"
@@ -56,3 +56,9 @@ certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-
 jenkins_subdomain    = "jenkins"
 jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.amazonaws.com"
 jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
+
+# Monitoring
+grafana_admin_password = "CHANGE_ME_use_env_var"
+grafana_subdomain      = "grafana"
+grafana_alb_dns_name   = "k8s-monitori-kubeprom-3ccd051ce4-1913664347.us-east-1.elb.amazonaws.com"
+grafana_alb_zone_id    = "Z35SXDOTRQ7X7K"

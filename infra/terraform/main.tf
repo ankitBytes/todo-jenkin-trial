@@ -164,6 +164,10 @@ module "route53" {
   jenkins_subdomain    = var.jenkins_subdomain
   jenkins_alb_dns_name = var.jenkins_alb_dns_name
   jenkins_alb_zone_id  = var.jenkins_alb_zone_id
+
+  grafana_subdomain    = var.grafana_subdomain
+  grafana_alb_dns_name = var.grafana_alb_dns_name
+  grafana_alb_zone_id  = var.grafana_alb_zone_id
 }
 
 module "alb" {
@@ -200,6 +204,65 @@ module "autoscalling" {
   aws_region        = var.aws_region
   oidc_provider_arn = module.eks.oidc_provider_arn
   oidc_issuer_host  = module.eks.oidc_issuer_host
+
+  depends_on = [module.eks]
+}
+
+resource "helm_release" "kube_prometheus_stack" {
+  name             = "kube-prometheus-stack"
+  namespace        = "monitoring"
+  create_namespace = true
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-prometheus-stack"
+  version          = "58.7.2"
+
+  disable_openapi_validation = true
+  wait                       = false
+
+  set {
+    name  = "grafana.adminPassword"
+    value = var.grafana_admin_password
+  }
+  set {
+    name  = "grafana.ingress.enabled"
+    value = "true"
+  }
+  set {
+    name  = "grafana.ingress.ingressClassName"
+    value = "alb"
+  }
+  set {
+    name  = "grafana.ingress.hosts[0]"
+    value = "grafana.${var.domain_name}"
+  }
+  set {
+    name  = "grafana.ingress.annotations.kubernetes\\.io/ingress\\.class"
+    value = "alb"
+  }
+  set {
+    name  = "grafana.ingress.annotations.alb\\.ingress\\.kubernetes\\.io/scheme"
+    value = "internet-facing"
+  }
+  set {
+    name  = "grafana.ingress.annotations.alb\\.ingress\\.kubernetes\\.io/target-type"
+    value = "ip"
+  }
+  set {
+    name  = "grafana.sidecar.dashboards.enabled"
+    value = "true"
+  }
+  set {
+    name  = "grafana.sidecar.dashboards.label"
+    value = "grafana_dashboard"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"
+    value = "false"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues"
+    value = "false"
+  }
 
   depends_on = [module.eks]
 }

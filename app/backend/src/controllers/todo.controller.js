@@ -1,18 +1,18 @@
+const { cacheHitsTotal, cacheMissesTotal } = require('../metrics');
+
 const CACHE_KEY = 'todos:all';
 const CACHE_TTL = 60; // seconds — why not infinite? RDS could be updated outside the app
 
 exports.getTodos = async (req, res) => {
   const redis = req.redis;
 
-  // Step 1: Check cache first
   const cached = await redis.get(CACHE_KEY);
   if (cached) {
-    console.log('✅ Cache hit');
+    cacheHitsTotal.inc();
     return res.json(JSON.parse(cached));
   }
 
-  // Step 2: Cache miss — hit RDS
-  console.log('⏳ Cache miss — querying RDS');
+  cacheMissesTotal.inc();
   const [rows] = await req.db.execute("SELECT * FROM todos");
 
   // Step 3: Populate cache for next request

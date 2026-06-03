@@ -4,8 +4,26 @@ const connectDB = require('./db');
 const connectRedis = require('./redis');
 const todoRoutes = require('./routes/todo.routes');
 const cors = require('cors');
+const { client, httpRequestDuration, httpRequestsTotal } = require('./metrics');
 
 const app = express();
+
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    const rawRoute = req.route ? req.baseUrl + req.route.path : req.path;
+    const route = rawRoute.replace(/\/$/, '') || '/';
+    const labels = { method: req.method, route, status_code: res.statusCode };
+    end(labels);
+    httpRequestsTotal.inc(labels);
+  });
+  next();
+});
+
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
 // ALLOWED_ORIGIN supports a single origin or comma-separated list
 const rawOrigin = process.env.ALLOWED_ORIGIN || '*';

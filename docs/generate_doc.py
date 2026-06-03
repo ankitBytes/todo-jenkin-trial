@@ -52,7 +52,7 @@ def add_code_block(doc, code_text):
     shd = OxmlElement('w:shd')
     shd.set(qn('w:val'), 'clear')
     shd.set(qn('w:color'), 'auto')
-    shd.set(qn('w:fill'), 'F0F0F0')
+    shd.set(qn('w:fill'), 'FFFFFF')
     pPr.append(shd)
     run = p.add_run(code_text)
     run.font.name = 'Courier New'
@@ -114,9 +114,9 @@ def add_two_col_table(doc, rows_data, header=None, col_widths=None):
         for i, h in enumerate(header):
             cell = row.cells[i]
             cell.text = h
-            set_cell_bg(cell, '1A1A2E')
+            set_cell_bg(cell, 'FFFFFF')
             cell.paragraphs[0].runs[0].bold = True
-            cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(0x1A, 0x1A, 0x2E)
             cell.paragraphs[0].runs[0].font.size = Pt(9.5)
     for row_data in rows_data:
         row = table.add_row()
@@ -176,7 +176,7 @@ fields = [
 for i, (k, v) in enumerate(fields):
     row = cover_table.rows[i]
     row.cells[0].text = k
-    set_cell_bg(row.cells[0], 'E8ECF5')
+    set_cell_bg(row.cells[0], 'FFFFFF')
     row.cells[0].paragraphs[0].runs[0].bold = True
     row.cells[0].paragraphs[0].runs[0].font.size = Pt(10)
     row.cells[1].text = v
@@ -235,6 +235,8 @@ toc_items = [
     ("23", "Troubleshooting Cheat Sheet"),
     ("24", "Conclusion"),
     ("25", "References"),
+    ("26", "Prometheus & Grafana Monitoring Stack"),
+    ("27", "Backend Prometheus Metrics Instrumentation"),
 ]
 toc_table = doc.add_table(rows=len(toc_items), cols=2)
 toc_table.style = 'Table Grid'
@@ -242,8 +244,8 @@ for i, (num, title) in enumerate(toc_items):
     toc_table.rows[i].cells[0].text = num
     toc_table.rows[i].cells[1].text = title
     if i % 2 == 0:
-        set_cell_bg(toc_table.rows[i].cells[0], 'F4F6FA')
-        set_cell_bg(toc_table.rows[i].cells[1], 'F4F6FA')
+        set_cell_bg(toc_table.rows[i].cells[0], 'FFFFFF')
+        set_cell_bg(toc_table.rows[i].cells[1], 'FFFFFF')
     for c in toc_table.rows[i].cells:
         for para in c.paragraphs:
             for run in para.runs:
@@ -1715,6 +1717,417 @@ refs = [
     ("IRSA Deep Dive",                          "https://aws.amazon.com/blogs/opensource/introducing-fine-grained-iam-roles-service-accounts/"),
 ]
 add_two_col_table(doc, refs, header=["Resource", "URL"])
+
+# ══════════════════════════════════════════════════════════════
+# SECTION 26 — PROMETHEUS & GRAFANA MONITORING STACK
+# ══════════════════════════════════════════════════════════════
+add_page_break(doc)
+add_heading(doc, "26. Prometheus & Grafana Monitoring Stack", level=1)
+
+add_note_box(doc,
+    "This stack is fully implemented and live. It was listed as a 'future improvement' in Section 21 "
+    "before the implementation was completed. The kube-prometheus-stack Helm release is managed by "
+    "Terraform and Grafana is accessible at https://grafana.ankit.services.",
+    "STATUS"
+)
+
+add_subheading(doc, "26.1  Installation via Terraform", level=2)
+add_para(doc, (
+    "The kube-prometheus-stack is deployed as a Terraform helm_release resource in infra/terraform/main.tf "
+    "(chart version 58.7.2 from prometheus-community). Terraform installs it into the monitoring namespace "
+    "(created automatically) after the EKS cluster is ready. This guarantees the monitoring stack exists "
+    "before any application workloads are deployed."
+))
+add_code_block(doc, """\
+resource "helm_release" "kube_prometheus_stack" {
+  name             = "kube-prometheus-stack"
+  namespace        = "monitoring"
+  create_namespace = true
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-prometheus-stack"
+  version          = "58.7.2"
+
+  disable_openapi_validation = true
+  wait                       = false
+
+  # Grafana admin password (supply via TF_VAR_grafana_admin_password)
+  set { name = "grafana.adminPassword"; value = var.grafana_admin_password }
+
+  # Expose Grafana via ALB Ingress at grafana.ankit.services
+  set { name = "grafana.ingress.enabled";                          value = "true"          }
+  set { name = "grafana.ingress.ingressClassName";                 value = "alb"           }
+  set { name = "grafana.ingress.hosts[0]";                        value = "grafana.ankit.services" }
+  set { name = "grafana.ingress.annotations.alb...scheme";        value = "internet-facing"}
+  set { name = "grafana.ingress.annotations.alb...target-type";   value = "ip"            }
+
+  # Dashboard sidecar — auto-imports ConfigMaps with grafana_dashboard="1" label
+  set { name = "grafana.sidecar.dashboards.enabled"; value = "true"             }
+  set { name = "grafana.sidecar.dashboards.label";   value = "grafana_dashboard"}
+
+  # Discover ServiceMonitors across ALL namespaces (not just monitoring)
+  set { name = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"; value = "false" }
+  set { name = "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues";     value = "false" }
+
+  depends_on = [module.eks]
+}""")
+
+add_para(doc, (
+    "The two boolean flags serviceMonitorSelectorNilUsesHelmValues = false and "
+    "podMonitorSelectorNilUsesHelmValues = false are critical. Without them, Prometheus only "
+    "discovers ServiceMonitors in its own namespace (monitoring). Setting both to false enables "
+    "cluster-wide ServiceMonitor discovery — allowing the todo namespace ServiceMonitor to be scraped."
+))
+
+add_subheading(doc, "26.2  What the Stack Deploys", level=2)
+add_two_col_table(doc, [
+    ("Prometheus Operator",   "Watches ServiceMonitor/PodMonitor CRDs and configures Prometheus dynamically"),
+    ("Prometheus",            "Time-series metrics database — scrapes all configured targets every 15s"),
+    ("Grafana",               "Dashboard UI — exposed at https://grafana.ankit.services"),
+    ("AlertManager",          "Alert routing and notification (Slack, PagerDuty, email — configurable)"),
+    ("kube-state-metrics",    "Exports Kubernetes object state as Prometheus metrics (pod counts, status, restarts)"),
+    ("node-exporter",         "Host-level metrics per node: CPU, memory, disk I/O, network"),
+], header=["Component", "Purpose"])
+
+add_subheading(doc, "26.3  Route53 — Grafana Subdomain Record", level=2)
+add_para(doc, (
+    "The Route53 module manages four A alias records. In addition to ankit.services (apex), "
+    "www.ankit.services (application), and jenkins.ankit.services, it also creates "
+    "grafana.ankit.services pointing to the ALB created by the Kubernetes Load Balancer Controller "
+    "for the Grafana Ingress. The ALB DNS name and zone ID are supplied as Terraform variables "
+    "(grafana_alb_dns_name, grafana_alb_zone_id) and set in environments/dev/terraform.tfvars "
+    "after retrieving them from the Kubernetes ingress status."
+))
+add_code_block(doc, """\
+# Retrieve Grafana ALB DNS after stack is deployed:
+kubectl get ingress kube-prometheus-stack-grafana -n monitoring \\
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# Set in environments/dev/terraform.tfvars:
+grafana_alb_dns_name = "k8s-monitori-kubeprom-3ccd051ce4-1913664347.us-east-1.elb.amazonaws.com"
+grafana_alb_zone_id  = "Z35SXDOTRQ7X7K"   # fixed us-east-1 ELB zone ID
+
+# Then re-apply Terraform to create the Route53 record:
+terraform apply -var-file=environments/dev/terraform.tfvars""")
+
+add_subheading(doc, "26.4  ServiceMonitor — app/k8s/monitoring/servicemonitor.yaml", level=2)
+add_para(doc, (
+    "The ServiceMonitor CRD (provided by the Prometheus Operator) tells Prometheus to scrape "
+    "the todo-backend-svc service in the todo namespace at the /metrics path every 15 seconds."
+))
+add_code_block(doc, """\
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: todo-backend
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack   # must match Prometheus operator selector label
+spec:
+  namespaceSelector:
+    matchNames: [todo]
+  selector:
+    matchLabels:
+      app: todo-backend              # selects todo-backend-svc
+  endpoints:
+  - port: http                       # named port in the service spec
+    path: /metrics
+    interval: 15s""")
+
+add_subheading(doc, "26.5  Prometheus RBAC — app/k8s/monitoring/prometheus-rbac.yaml", level=2)
+add_para(doc, (
+    "Prometheus runs in the monitoring namespace but needs permission to read service discovery "
+    "data (services, endpoints, pods) from the todo namespace. The Role and RoleBinding grant "
+    "exactly those permissions to the Prometheus Operator and Prometheus service accounts. "
+    "Without this, Prometheus cannot discover backend pod endpoints and ServiceMonitor scraping silently fails."
+))
+add_code_block(doc, """\
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-todo-access
+  namespace: todo        # grants permission IN the todo namespace
+rules:
+- apiGroups: [""]
+  resources: ["services", "endpoints", "pods"]
+  verbs:     ["get", "list", "watch"]
+---
+kind: RoleBinding
+subjects:
+- kind: ServiceAccount
+  name: kube-prometheus-stack-operator     # prometheus operator
+  namespace: monitoring
+- kind: ServiceAccount
+  name: kube-prometheus-stack-prometheus   # prometheus itself
+  namespace: monitoring""")
+
+add_subheading(doc, "26.6  Additional Scrape Config — app/k8s/monitoring/additional-scrape-secret.yaml", level=2)
+add_para(doc, (
+    "A Kubernetes Secret in the monitoring namespace provides an additional Prometheus scrape config "
+    "that uses Kubernetes service-discovery (role: endpoints) to find backend pod IPs dynamically. "
+    "This complements the ServiceMonitor and adds rich per-pod labels (pod, namespace, service, container) "
+    "to all scraped metrics — enabling pod-level filtering in Grafana dashboards."
+))
+
+add_subheading(doc, "26.7  Grafana Dashboard — app/k8s/monitoring/grafana-dashboard-configmap.yaml", level=2)
+add_para(doc, (
+    "A pre-built Grafana dashboard is delivered as a Kubernetes ConfigMap with the label "
+    "grafana_dashboard: \"1\". The Grafana sidecar (enabled via Terraform) watches for ConfigMaps "
+    "with this label across all namespaces and automatically imports them into Grafana at startup — "
+    "no manual import required."
+))
+add_two_col_table(doc, [
+    ("Dashboard UID",         "todo-app"),
+    ("Auto-refresh",          "Every 30 seconds"),
+    ("Default time range",    "Last 1 hour"),
+    ("Panel count",           "12 panels"),
+], header=["Property", "Value"])
+
+add_para(doc, "")
+add_two_col_table(doc, [
+    ("Request Rate (req/s)",        "sum(rate(http_requests_total[2m])) by (route)             — requests per second per API route"),
+    ("Error Rate (5xx %)",          "100 * sum(rate(http_requests_total{status_code=~\"5..\"}[2m])) / sum(...)  — server error percentage"),
+    ("P95 Latency (s)",             "histogram_quantile(0.95, ...) by (le, route)              — 95th percentile response time"),
+    ("Backend Pods Running",        "count(kube_pod_status_ready{namespace=\"todo\", pod=~\"todo-backend.*\"})"),
+    ("Backend Memory Usage (MB)",   "container_memory_working_set_bytes per pod / 1024 / 1024"),
+    ("Frontend Pods Running",       "count(kube_pod_status_ready{namespace=\"todo\", pod=~\"todo-frontend.*\"})"),
+    ("Frontend Memory Usage (MB)",  "container_memory_working_set_bytes per pod / 1024 / 1024"),
+    ("Backend CPU Usage (cores)",   "rate(container_cpu_usage_seconds_total{pod=~\"todo-backend.*\"}[2m])"),
+    ("Pod Restarts",                "kube_pod_container_status_restarts_total by pod           — crash indicator"),
+    ("Todo Operations by Method",   "sum(rate(http_requests_total{route=~\"/api/todos.*\"}[2m])) by (method)"),
+    ("4xx Client Error Rate",       "sum(rate(http_requests_total{status_code=~\"4..\"}[2m])) by (route)"),
+    ("Cache Hit Rate",              "rate(cache_hits_total[2m]) / (rate(cache_hits_total[2m]) + rate(cache_misses_total[2m]))"),
+], header=["Panel", "PromQL / Description"])
+
+add_subheading(doc, "26.8  Applying Monitoring Manifests", level=2)
+add_para(doc, (
+    "The Jenkins pipeline applies all four files in the monitoring/ directory at the end of "
+    "the Apply K8s Manifests stage (kubectl apply -f app/k8s/monitoring/). For manual apply:"
+))
+add_code_block(doc, """\
+# Apply in dependency order:
+kubectl apply -f app/k8s/monitoring/prometheus-rbac.yaml
+kubectl apply -f app/k8s/monitoring/servicemonitor.yaml
+kubectl apply -f app/k8s/monitoring/additional-scrape-secret.yaml
+kubectl apply -f app/k8s/monitoring/grafana-dashboard-configmap.yaml
+
+# Verify Prometheus is scraping the backend:
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
+# Then open http://localhost:9090/targets and look for todo-backend
+
+# Access Grafana:
+open https://grafana.ankit.services
+# Default login: admin / <value of TF_VAR_grafana_admin_password>""")
+
+add_subheading(doc, "26.9  Local Monitoring (Docker Compose)", level=2)
+add_para(doc, (
+    "The docker-compose.yaml in app/docker/ also runs Prometheus and Grafana locally for "
+    "development-time metrics testing. Prometheus (port 9090) scrapes backend:3000/metrics every 15 "
+    "seconds using the static config in app/docker/prometheus.yml. Grafana (port 3001) can be "
+    "connected to the local Prometheus datasource to preview the same dashboards before deploying to EKS."
+))
+add_code_block(doc, """\
+# Start full local stack including monitoring:
+docker compose -f app/docker/docker-compose.yaml up
+
+# Prometheus UI:    http://localhost:9090
+# Grafana UI:       http://localhost:3001  (admin / admin)
+
+# In Grafana: Settings → Data Sources → Add → Prometheus → URL: http://prometheus:9090
+# Import dashboard from: app/k8s/monitoring/grafana-dashboard-configmap.yaml (copy todo-app.json)""")
+
+add_subheading(doc, "26.10  Troubleshooting the Monitoring Stack", level=2)
+add_two_col_table(doc, [
+    ("ServiceMonitor not found by Prometheus",
+     "Check: serviceMonitorSelectorNilUsesHelmValues = false in Terraform. "
+     "Verify label release: kube-prometheus-stack on the ServiceMonitor. "
+     "Fix: re-apply Terraform with the correct helm set values."),
+    ("/metrics endpoint returns 404",
+     "The backend pod is running an older image built before metrics.js was added. "
+     "Fix: trigger a backend rebuild in Jenkins or docker push a new image."),
+    ("Grafana dashboard shows 'No data'",
+     "Prometheus is not scraping the backend. Check Prometheus targets at "
+     "http://localhost:9090/targets (port-forward). Verify prometheus-rbac.yaml is applied in the todo namespace."),
+    ("grafana.ankit.services unreachable",
+     "The Grafana ALB DNS name / zone ID in terraform.tfvars may not yet be set. "
+     "Fix: kubectl get ingress -n monitoring, get the hostname, add to tfvars, re-apply Terraform."),
+    ("Cache Hit Rate panel shows NaN",
+     "No write operations have occurred yet (no cache_misses_total increments). "
+     "Create a todo item to trigger a cache miss, then GET /api/todos to get a cache hit."),
+], header=["Symptom", "Cause & Fix"])
+
+# ══════════════════════════════════════════════════════════════
+# SECTION 27 — BACKEND PROMETHEUS METRICS INSTRUMENTATION
+# ══════════════════════════════════════════════════════════════
+add_page_break(doc)
+add_heading(doc, "27. Backend Prometheus Metrics Instrumentation", level=1)
+
+add_para(doc, (
+    "The backend is fully instrumented with Prometheus metrics using the prom-client npm library. "
+    "This instrumentation is the data source for all Grafana dashboard panels. The metrics module "
+    "(app/backend/src/metrics.js) and the middleware in app/backend/src/app.js work together "
+    "to capture four categories of signal: HTTP request performance, cache effectiveness, "
+    "application errors, and Node.js process health."
+))
+
+add_subheading(doc, "27.1  Metrics Module — app/backend/src/metrics.js", level=2)
+add_code_block(doc, """\
+const client = require('prom-client');
+
+// Default metrics: Node.js process CPU, heap, GC, event-loop lag
+client.collectDefaultMetrics();
+
+// HTTP request latency histogram — enables percentile queries (p50, p95, p99)
+const httpRequestDuration = new client.Histogram({
+  name:       'http_request_duration_seconds',
+  help:       'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets:    [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+});
+
+// Total request count — enables rate() queries (requests per second)
+const httpRequestsTotal = new client.Counter({
+  name:       'http_requests_total',
+  help:       'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status_code'],
+});
+
+// Redis cache hit/miss counters — powers the Cache Hit Rate Grafana panel
+const cacheHitsTotal   = new client.Counter({ name: 'cache_hits_total',   ... });
+const cacheMissesTotal = new client.Counter({ name: 'cache_misses_total', ... });
+
+module.exports = { client, httpRequestDuration, httpRequestsTotal,
+                   cacheHitsTotal, cacheMissesTotal };""")
+
+add_two_col_table(doc, [
+    ("http_request_duration_seconds", "Histogram",
+     "method, route, status_code",
+     "Per-request latency. Buckets enable histogram_quantile() for p95/p99 latency panels."),
+    ("http_requests_total",           "Counter",
+     "method, route, status_code",
+     "Total requests. rate() over 2m gives requests/second. Denominator for error rate."),
+    ("cache_hits_total",              "Counter",
+     "none",
+     "Incremented on Redis cache hit. Combined with cache_misses_total for hit-rate panel."),
+    ("cache_misses_total",            "Counter",
+     "none",
+     "Incremented on Redis cache miss (triggers MySQL query). Shows cache effectiveness."),
+    ("process_cpu_seconds_total",     "Counter (default)",
+     "none",
+     "Node.js process CPU time — from collectDefaultMetrics()."),
+    ("nodejs_heap_size_used_bytes",   "Gauge (default)",
+     "none",
+     "Node.js heap memory — early indicator of memory leaks."),
+], header=["Metric Name", "Type", "Labels", "Purpose"])
+
+add_subheading(doc, "27.2  HTTP Middleware in app/backend/src/app.js", level=2)
+add_para(doc, (
+    "An Express middleware intercepts every request/response pair and records duration and count "
+    "with the correct route label. The middleware fires on res.on('finish') — after the response "
+    "is sent — ensuring the measured duration includes all handler time (DB queries, Redis calls, "
+    "JSON serialization)."
+))
+add_code_block(doc, """\
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();   // starts the clock
+  res.on('finish', () => {
+    // Use Express route pattern (e.g. /api/todos/:id) not raw URL
+    // This prevents high-cardinality labels from unique IDs like /api/todos/12345
+    const rawRoute = req.route ? req.baseUrl + req.route.path : req.path;
+    const route    = rawRoute.replace(/\\/$/, '') || '/';
+    const labels   = { method: req.method, route, status_code: res.statusCode };
+    end(labels);                    // records duration with labels
+    httpRequestsTotal.inc(labels);  // increments request counter with labels
+  });
+  next();
+});""")
+
+add_note_box(doc,
+    "Using req.route.path instead of req.path is essential for Prometheus. req.path would produce "
+    "a unique label for every request with a numeric ID (e.g. /api/todos/1, /api/todos/2, ...), "
+    "causing Prometheus cardinality explosion. req.route.path gives the template: /api/todos/:id.",
+    "IMPORTANT"
+)
+
+add_subheading(doc, "27.3  /metrics Endpoint", level=2)
+add_code_block(doc, """\
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
+});""")
+add_para(doc, (
+    "The /metrics endpoint returns all registered metrics in Prometheus text exposition format "
+    "(text/plain; version=0.0.4). Prometheus scrapes this endpoint every 15 seconds as configured "
+    "in the ServiceMonitor. The endpoint is unauthenticated — in a stricter environment, it should "
+    "be restricted to the monitoring namespace CIDR via NetworkPolicy or basic auth."
+))
+add_code_block(doc, """\
+# Test the metrics endpoint locally:
+kubectl port-forward -n todo deployment/todo-backend 3000:3000
+curl http://localhost:3000/metrics
+
+# Example output:
+# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+# http_requests_total{method="GET",route="/api/todos",status_code="200"} 42
+# http_requests_total{method="POST",route="/api/todos",status_code="200"} 7
+#
+# HELP http_request_duration_seconds Duration of HTTP requests in seconds
+# TYPE http_request_duration_seconds histogram
+# http_request_duration_seconds_bucket{le="0.025",...} 45
+# ...
+# http_request_duration_seconds_sum{...} 1.23
+# http_request_duration_seconds_count{...} 49""")
+
+add_subheading(doc, "27.4  Cache Hit/Miss Instrumentation in todo.controller.js", level=2)
+add_code_block(doc, """\
+const { cacheHitsTotal, cacheMissesTotal } = require('../metrics');
+const CACHE_KEY = 'todos:all';
+const CACHE_TTL = 60;   // seconds
+
+exports.getTodos = async (req, res) => {
+  const cached = await redis.get(CACHE_KEY);
+  if (cached) {
+    cacheHitsTotal.inc();                           // ← increments cache_hits_total
+    return res.json(JSON.parse(cached));
+  }
+  cacheMissesTotal.inc();                           // ← increments cache_misses_total
+  const [rows] = await req.db.execute("SELECT * FROM todos");
+  await redis.set(CACHE_KEY, JSON.stringify(rows), 'EX', CACHE_TTL);
+  res.json(rows);
+};
+
+// All write operations invalidate the cache:
+exports.createTodo = async (req, res) => {
+  // ... INSERT ...
+  await req.redis.del(CACHE_KEY);   // cache-aside invalidation
+  res.json({ message: "Todo created" });
+};""")
+add_para(doc, (
+    "The cache-aside pattern means cache_misses_total increments on the first request after a "
+    "write operation (or after the 60-second TTL expires). A sustained hit rate near 1.0 indicates "
+    "the read-heavy workload is well-served by the cache. A hit rate near 0 indicates either "
+    "very frequent writes, a Redis connection problem, or the first request after a cold start."
+))
+
+add_subheading(doc, "27.5  Useful PromQL Queries", level=2)
+add_two_col_table(doc, [
+    ("Request rate (req/s) by route",
+     "sum(rate(http_requests_total[2m])) by (route)"),
+    ("Server error rate (5xx %)",
+     "100 * sum(rate(http_requests_total{status_code=~\"5..\"}[2m])) / sum(rate(http_requests_total[2m]))"),
+    ("P95 response latency by route",
+     "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[2m])) by (le, route))"),
+    ("Redis cache hit rate",
+     "rate(cache_hits_total[2m]) / (rate(cache_hits_total[2m]) + rate(cache_misses_total[2m]))"),
+    ("Backend pod count (ready)",
+     "count(kube_pod_status_ready{namespace=\"todo\", pod=~\"todo-backend.*\", condition=\"true\"})"),
+    ("Backend memory per pod (MB)",
+     "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-backend.*\"}) by (pod) / 1024 / 1024"),
+    ("Backend CPU cores per pod",
+     "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[2m])) by (pod)"),
+    ("Todo CRUD operations by method",
+     "sum(rate(http_requests_total{route=~\"/api/todos.*\"}[2m])) by (method)"),
+], header=["What to measure", "PromQL"])
 
 # ── Save ─────────────────────────────────────────────────────
 out_path = "/home/vvdn/Desktop/todo-fullstack/docs/Fullstack_Deployment_using_Docker_Kubernetes_Terraform_Jenkins.docx"

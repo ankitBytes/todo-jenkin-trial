@@ -39,3 +39,15 @@ resource "aws_route53_record" "jenkins" {
     evaluate_target_health = false
   }
 }
+
+resource "aws_route53_record" "grafana" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "${var.grafana_subdomain}.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = var.grafana_alb_dns_name
+    zone_id                = var.grafana_alb_zone_id
+    evaluate_target_health = true
+  }
+}

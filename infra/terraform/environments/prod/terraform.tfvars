@@ -10,7 +10,7 @@ private_subnet_cidrs = ["10.1.10.0/24", "10.1.11.0/24"]
 availability_zones   = ["us-east-1a", "us-east-1b"]
 
 # ── EKS ───────────────────────────────────────────────────────────────────────
-eks_cluster_name        = "todo-tf-cluster"
+eks_cluster_name        = "todo-tf-cluster-prod"
 eks_kubernetes_version  = "1.30"
 eks_node_instance_types = ["t3.large"]
 eks_node_desired_size   = 2
@@ -18,8 +18,8 @@ eks_node_min_size       = 2
 eks_node_max_size       = 6
 
 # ── ECR ───────────────────────────────────────────────────────────────────────
-ecr_frontend_repo_name    = "todo-frontend"
-ecr_backend_repo_name     = "todo-backend"
+ecr_frontend_repo_name    = "todo-frontend-prod"
+ecr_backend_repo_name     = "todo-backend-prod"
 ecr_image_retention_count = 10
 
 # ── RDS ───────────────────────────────────────────────────────────────────────
@@ -56,3 +56,10 @@ certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-
 # ── Jenkins (shared, same as dev) ─────────────────────────────────────────────
 jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.amazonaws.com"
 jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+# Set via: export TF_VAR_grafana_admin_password=...
+grafana_admin_password = "CHANGE_ME_use_env_var"
+grafana_subdomain      = "grafana"
+grafana_alb_dns_name   = "k8s-monitori-kubeprom-3ccd051ce4-1913664347.us-east-1.elb.amazonaws.com"
+grafana_alb_zone_id    = "Z35SXDOTRQ7X7K"

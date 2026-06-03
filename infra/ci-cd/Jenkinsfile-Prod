@@ -1,0 +1,222 @@
+pipeline {
+    agent {
+        label 'jenkins-agent'
+    }
+
+    environment {
+        AWS_REGION      = 'us-east-1'
+        ECR_REGISTRY    = '668076964228.dkr.ecr.us-east-1.amazonaws.com'
+        ECR_FRONTEND    = "${ECR_REGISTRY}/todo-frontend-prod"
+        ECR_BACKEND     = "${ECR_REGISTRY}/todo-backend-prod"
+        EKS_CLUSTER     = 'todo-tf-cluster-prod'
+        IMAGE_TAG       = "v${BUILD_NUMBER}"
+        KUBE_NS         = 'todo'
+        TF_DIR          = 'infra/terraform'
+        TF_VAR_rds_password = credentials('rds-password')
+        TF_VAR_grafana_admin_password = credentials('grafana-admin-password')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                // Wait for DinD daemon to be ready before any Docker commands
+                retry(15) {
+                    sleep(time: 3, unit: 'SECONDS')
+                    sh 'docker info > /dev/null 2>&1'
+                }
+            }
+        }
+
+        // ── App stages run in parallel ──────────────────────────────────────
+        stage('App') {
+            parallel {
+                stage('Frontend') {
+                    stages {
+                        stage('Build Frontend') {
+                            when { changeset 'app/frontend/**' }
+                            steps {
+                                sh """
+                                    docker build \\
+                                        -f app/docker/Dockerfile.frontend \\
+                                        -t ${ECR_FRONTEND}:${IMAGE_TAG} \\
+                                        app/frontend/
+                                """
+                            }
+                        }
+                        stage('Push Frontend') {
+                            when { changeset 'app/frontend/**' }
+                            steps {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws ecr get-login-password --region ${AWS_REGION} | \\
+                                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                                        docker push ${ECR_FRONTEND}:${IMAGE_TAG}
+                                        docker tag ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
+                                        docker push ${ECR_FRONTEND}:latest
+                                    """
+                                }
+                            }
+                        }
+                        stage('Deploy Frontend') {
+                            when { changeset 'app/frontend/**' }
+                            steps {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws eks update-kubeconfig \\
+                                            --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                                        kubectl set image deployment/todo-frontend \\
+                                            todo-frontend=${ECR_FRONTEND}:${IMAGE_TAG} \\
+                                            -n ${KUBE_NS}
+                                        kubectl rollout status deployment/todo-frontend \\
+                                            -n ${KUBE_NS} --timeout=180s \\
+                                        || (kubectl rollout undo deployment/todo-frontend -n ${KUBE_NS} && exit 1)
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+
+                stage('Backend') {
+                    stages {
+                        stage('Build Backend') {
+                            when { changeset 'app/backend/**' }
+                            steps {
+                                sh """
+                                    docker build \\
+                                        -f app/docker/Dockerfile.backend \\
+                                        -t ${ECR_BACKEND}:${IMAGE_TAG} \\
+                                        app/backend/
+                                """
+                            }
+                        }
+                        stage('Push Backend') {
+                            when { changeset 'app/backend/**' }
+                            steps {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws ecr get-login-password --region ${AWS_REGION} | \\
+                                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                                        docker push ${ECR_BACKEND}:${IMAGE_TAG}
+                                        docker tag ${ECR_BACKEND}:${IMAGE_TAG} ${ECR_BACKEND}:latest
+                                        docker push ${ECR_BACKEND}:latest
+                                    """
+                                }
+                            }
+                        }
+                        stage('Deploy Backend') {
+                            when { changeset 'app/backend/**' }
+                            steps {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                                  credentialsId: 'aws-creds']]) {
+                                    sh """
+                                        aws eks update-kubeconfig \\
+                                            --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                                        kubectl set image deployment/todo-backend \\
+                                            todo-backend=${ECR_BACKEND}:${IMAGE_TAG} \\
+                                            -n ${KUBE_NS}
+                                        kubectl rollout status deployment/todo-backend \\
+                                            -n ${KUBE_NS} --timeout=180s \\
+                                        || (kubectl rollout undo deployment/todo-backend -n ${KUBE_NS} && exit 1)
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Infra stages ────────────────────────────────────────────────────
+        stage('Terraform Init') {
+            when { changeset 'infra/**' }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh "terraform -chdir=${TF_DIR} init -input=false"
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            when { changeset 'infra/**' }
+            steps {
+                sh "terraform -chdir=${TF_DIR} validate"
+            }
+        }
+        stage('Terraform Plan') {
+            when { changeset 'infra/**' }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh """
+                        terraform -chdir=${TF_DIR} plan \\
+                            -var-file=environments/prod/terraform.tfvars \\
+                            -out=tfplan -input=false
+                    """
+                }
+            }
+        }
+        stage('Terraform Apply') {
+            when { changeset 'infra/**' }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh "terraform -chdir=${TF_DIR} apply -input=false tfplan"
+                }
+            }
+        }
+        stage('Apply K8s Manifests') {
+            when {
+                anyOf {
+                    changeset 'infra/**'
+                    changeset 'app/k8s/**'
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh """
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+
+                        FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
+                        BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
+                        BACKEND_IRSA_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw todo_backend_irsa_role_arn)
+                        SECRET_NAME=\$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
+
+                        sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \
+                            -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \
+                            app/k8s/targetgroupbinding.yaml | kubectl apply -f -
+
+                        sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \
+                            app/k8s/serviceaccount.yaml | kubectl apply -f -
+
+                        sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
+                            app/k8s/secretproviderclass.yaml | kubectl apply -f -
+
+                        kubectl apply -f app/k8s/monitoring/
+                    """
+                }
+            }
+        }
+
+        // ── Cleanup ─────────────────────────────────────────────────────────
+        stage('Cleanup') {
+            steps {
+                sh """
+                    docker rmi ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest || true
+                    docker rmi ${ECR_BACKEND}:${IMAGE_TAG}  ${ECR_BACKEND}:latest  || true
+                    rm -f ${TF_DIR}/tfplan || true
+                """
+            }
+        }
+    }
+
+    post {
+        success { echo "Pipeline ${IMAGE_TAG} completed successfully." }
+        failure { echo 'Pipeline failed — check stage logs above.' }
+    }
+}

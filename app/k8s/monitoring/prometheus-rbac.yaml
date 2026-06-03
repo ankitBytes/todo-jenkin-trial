@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-todo-access
+  namespace: todo
+rules:
+- apiGroups: [""]
+  resources: ["services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-todo-access
+  namespace: todo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-todo-access
+subjects:
+- kind: ServiceAccount
+  name: kube-prometheus-stack-operator
+  namespace: monitoring
+- kind: ServiceAccount
+  name: kube-prometheus-stack-prometheus
+  namespace: monitoring
