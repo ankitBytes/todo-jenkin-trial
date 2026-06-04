@@ -3,6 +3,10 @@ pipeline {
         label 'jenkins-agent'
     }
 
+    parameters {
+        booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Force all stages (frontend, backend, terraform) regardless of changeset')
+    }
+
     environment {
         AWS_REGION      = 'us-east-1'
         ECR_REGISTRY    = '668076964228.dkr.ecr.us-east-1.amazonaws.com'
@@ -35,6 +39,7 @@ pipeline {
                         stage('Build Frontend') {
                             when {
                                 anyOf {
+                                    expression { params.FORCE_DEPLOY }
                                     expression { env.BUILD_NUMBER == '1' }
                                     changeset 'app/frontend/**'
                                 }
@@ -51,6 +56,7 @@ pipeline {
                         stage('Push Frontend') {
                             when {
                                 anyOf {
+                                    expression { params.FORCE_DEPLOY }
                                     expression { env.BUILD_NUMBER == '1' }
                                     changeset 'app/frontend/**'
                                 }
@@ -71,6 +77,7 @@ pipeline {
                         stage('Deploy Frontend') {
                             when {
                                 anyOf {
+                                    expression { params.FORCE_DEPLOY }
                                     expression { env.BUILD_NUMBER == '1' }
                                     changeset 'app/frontend/**'
                                 }
@@ -99,6 +106,7 @@ pipeline {
                         stage('Build Backend') {
                             when {
                                 anyOf {
+                                    expression { params.FORCE_DEPLOY }
                                     expression { env.BUILD_NUMBER == '1' }
                                     changeset 'app/backend/**'
                                 }
@@ -115,6 +123,7 @@ pipeline {
                         stage('Push Backend') {
                             when {
                                 anyOf {
+                                    expression { params.FORCE_DEPLOY }
                                     expression { env.BUILD_NUMBER == '1' }
                                     changeset 'app/backend/**'
                                 }
@@ -135,6 +144,7 @@ pipeline {
                         stage('Deploy Backend') {
                             when {
                                 anyOf {
+                                    expression { params.FORCE_DEPLOY }
                                     expression { env.BUILD_NUMBER == '1' }
                                     changeset 'app/backend/**'
                                 }
@@ -164,6 +174,7 @@ pipeline {
         stage('Terraform Init') {
             when {
                 anyOf {
+                    expression { params.FORCE_DEPLOY }
                     expression { env.BUILD_NUMBER == '1' }
                     changeset 'infra/**'
                 }
@@ -178,6 +189,7 @@ pipeline {
         stage('Terraform Validate') {
             when {
                 anyOf {
+                    expression { params.FORCE_DEPLOY }
                     expression { env.BUILD_NUMBER == '1' }
                     changeset 'infra/**'
                 }
@@ -189,6 +201,7 @@ pipeline {
         stage('Terraform Plan') {
             when {
                 anyOf {
+                    expression { params.FORCE_DEPLOY }
                     expression { env.BUILD_NUMBER == '1' }
                     changeset 'infra/**'
                 }
@@ -207,6 +220,7 @@ pipeline {
         stage('Terraform Apply') {
             when {
                 anyOf {
+                    expression { params.FORCE_DEPLOY }
                     expression { env.BUILD_NUMBER == '1' }
                     changeset 'infra/**'
                 }
@@ -221,6 +235,7 @@ pipeline {
         stage('Apply K8s Manifests') {
             when {
                 anyOf {
+                    expression { params.FORCE_DEPLOY }
                     expression { env.BUILD_NUMBER == '1' }
                     changeset 'infra/**'
                     changeset 'app/k8s/**'
