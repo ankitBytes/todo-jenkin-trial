@@ -12,6 +12,7 @@ pipeline {
         IMAGE_TAG       = "v${BUILD_NUMBER}"
         KUBE_NS         = 'todo'
         TF_DIR          = 'infra/terraform'
+        FIRST_RUN       = "${BUILD_NUMBER == '1' ? 'true' : 'false'}"
     }
 
     stages {
@@ -32,7 +33,12 @@ pipeline {
                 stage('Frontend') {
                     stages {
                         stage('Build Frontend') {
-                            when { changeset 'app/frontend/**' }
+                            when {
+                                anyOf {
+                                    expression { env.BUILD_NUMBER == '1' }
+                                    changeset 'app/frontend/**'
+                                }
+                            }
                             steps {
                                 sh """
                                     docker build \\
@@ -43,7 +49,12 @@ pipeline {
                             }
                         }
                         stage('Push Frontend') {
-                            when { changeset 'app/frontend/**' }
+                            when {
+                                anyOf {
+                                    expression { env.BUILD_NUMBER == '1' }
+                                    changeset 'app/frontend/**'
+                                }
+                            }
                             steps {
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                                   credentialsId: 'aws-creds']]) {
@@ -58,7 +69,12 @@ pipeline {
                             }
                         }
                         stage('Deploy Frontend') {
-                            when { changeset 'app/frontend/**' }
+                            when {
+                                anyOf {
+                                    expression { env.BUILD_NUMBER == '1' }
+                                    changeset 'app/frontend/**'
+                                }
+                            }
                             steps {
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                                   credentialsId: 'aws-creds']]) {
@@ -81,7 +97,12 @@ pipeline {
                 stage('Backend') {
                     stages {
                         stage('Build Backend') {
-                            when { changeset 'app/backend/**' }
+                            when {
+                                anyOf {
+                                    expression { env.BUILD_NUMBER == '1' }
+                                    changeset 'app/backend/**'
+                                }
+                            }
                             steps {
                                 sh """
                                     docker build \\
@@ -92,7 +113,12 @@ pipeline {
                             }
                         }
                         stage('Push Backend') {
-                            when { changeset 'app/backend/**' }
+                            when {
+                                anyOf {
+                                    expression { env.BUILD_NUMBER == '1' }
+                                    changeset 'app/backend/**'
+                                }
+                            }
                             steps {
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                                   credentialsId: 'aws-creds']]) {
@@ -107,7 +133,12 @@ pipeline {
                             }
                         }
                         stage('Deploy Backend') {
-                            when { changeset 'app/backend/**' }
+                            when {
+                                anyOf {
+                                    expression { env.BUILD_NUMBER == '1' }
+                                    changeset 'app/backend/**'
+                                }
+                            }
                             steps {
                                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                                   credentialsId: 'aws-creds']]) {
@@ -131,7 +162,12 @@ pipeline {
 
         // ── Infra stages ────────────────────────────────────────────────────
         stage('Terraform Init') {
-            when { changeset 'infra/**' }
+            when {
+                anyOf {
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-creds']]) {
@@ -140,13 +176,23 @@ pipeline {
             }
         }
         stage('Terraform Validate') {
-            when { changeset 'infra/**' }
+            when {
+                anyOf {
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
             steps {
                 sh "terraform -chdir=${TF_DIR} validate"
             }
         }
         stage('Terraform Plan') {
-            when { changeset 'infra/**' }
+            when {
+                anyOf {
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-creds']]) {
@@ -159,7 +205,12 @@ pipeline {
             }
         }
         stage('Terraform Apply') {
-            when { changeset 'infra/**' }
+            when {
+                anyOf {
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-creds']]) {
@@ -170,6 +221,7 @@ pipeline {
         stage('Apply K8s Manifests') {
             when {
                 anyOf {
+                    expression { env.BUILD_NUMBER == '1' }
                     changeset 'infra/**'
                     changeset 'app/k8s/**'
                 }

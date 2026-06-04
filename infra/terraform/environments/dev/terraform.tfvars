@@ -57,6 +57,6 @@ jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.
 jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
 
 # Monitoring
-grafana_subdomain      = "dev.grafana"
+grafana_subdomain      = "grafana"
 grafana_alb_dns_name   = "k8s-monitori-kubeprom-3ccd051ce4-1913664347.us-east-1.elb.amazonaws.com"
 grafana_alb_zone_id    = "Z35SXDOTRQ7X7K"
