@@ -31,7 +31,106 @@ pipeline {
             }
         }
 
-        // ── App stages run in parallel ──────────────────────────────────────
+        // ── Infra stages (always before app) ────────────────────────────────
+        stage('Terraform Init') {
+            when {
+                anyOf {
+                    expression { params.FORCE_DEPLOY }
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh "terraform -chdir=${TF_DIR} init -backend-config=environments/prod/backend.tf -reconfigure -input=false"
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            when {
+                anyOf {
+                    expression { params.FORCE_DEPLOY }
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
+            steps {
+                sh "terraform -chdir=${TF_DIR} validate"
+            }
+        }
+        stage('Terraform Plan') {
+            when {
+                anyOf {
+                    expression { params.FORCE_DEPLOY }
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh """
+                        terraform -chdir=${TF_DIR} plan \\
+                            -var-file=environments/prod/terraform.tfvars \\
+                            -out=tfplan -input=false
+                    """
+                }
+            }
+        }
+        stage('Terraform Apply') {
+            when {
+                anyOf {
+                    expression { params.FORCE_DEPLOY }
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh "terraform -chdir=${TF_DIR} apply -input=false tfplan"
+                }
+            }
+        }
+        stage('Apply K8s Manifests') {
+            when {
+                anyOf {
+                    expression { params.FORCE_DEPLOY }
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                    changeset 'app/k8s/**'
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-creds']]) {
+                    sh """
+                        terraform -chdir=${TF_DIR} init -input=false
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+
+                        FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
+                        BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
+                        BACKEND_IRSA_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw todo_backend_irsa_role_arn)
+                        SECRET_NAME=\$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
+
+                        sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \
+                            -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \
+                            app/k8s/targetgroupbinding.yaml | kubectl apply -f -
+
+                        sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \
+                            app/k8s/serviceaccount.yaml | kubectl apply -f -
+
+                        sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
+                            app/k8s/secretproviderclass.yaml | kubectl apply -f -
+
+                        kubectl apply -f app/k8s/monitoring/
+                    """
+                }
+            }
+        }
+
+        // ── App stages (after infra is ready) ───────────────────────────────
         stage('App') {
             parallel {
                 stage('Frontend') {
@@ -166,105 +265,6 @@ pipeline {
                             }
                         }
                     }
-                }
-            }
-        }
-
-        // ── Infra stages ────────────────────────────────────────────────────
-        stage('Terraform Init') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { env.BUILD_NUMBER == '1' }
-                    changeset 'infra/**'
-                }
-            }
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                  credentialsId: 'aws-creds']]) {
-                    sh "terraform -chdir=${TF_DIR} init -backend-config=environments/prod/backend.tf -reconfigure -input=false"
-                }
-            }
-        }
-        stage('Terraform Validate') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { env.BUILD_NUMBER == '1' }
-                    changeset 'infra/**'
-                }
-            }
-            steps {
-                sh "terraform -chdir=${TF_DIR} validate"
-            }
-        }
-        stage('Terraform Plan') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { env.BUILD_NUMBER == '1' }
-                    changeset 'infra/**'
-                }
-            }
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                  credentialsId: 'aws-creds']]) {
-                    sh """
-                        terraform -chdir=${TF_DIR} plan \\
-                            -var-file=environments/prod/terraform.tfvars \\
-                            -out=tfplan -input=false
-                    """
-                }
-            }
-        }
-        stage('Terraform Apply') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { env.BUILD_NUMBER == '1' }
-                    changeset 'infra/**'
-                }
-            }
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                  credentialsId: 'aws-creds']]) {
-                    sh "terraform -chdir=${TF_DIR} apply -input=false tfplan"
-                }
-            }
-        }
-        stage('Apply K8s Manifests') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { env.BUILD_NUMBER == '1' }
-                    changeset 'infra/**'
-                    changeset 'app/k8s/**'
-                }
-            }
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                  credentialsId: 'aws-creds']]) {
-                    sh """
-                        terraform -chdir=${TF_DIR} init -input=false
-                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
-
-                        FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
-                        BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
-                        BACKEND_IRSA_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw todo_backend_irsa_role_arn)
-                        SECRET_NAME=\$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
-
-                        sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \
-                            -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \
-                            app/k8s/targetgroupbinding.yaml | kubectl apply -f -
-
-                        sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \
-                            app/k8s/serviceaccount.yaml | kubectl apply -f -
-
-                        sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
-                            app/k8s/secretproviderclass.yaml | kubectl apply -f -
-
-                        kubectl apply -f app/k8s/monitoring/
-                    """
                 }
             }
         }
