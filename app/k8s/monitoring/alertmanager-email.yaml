@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: todo-email-alerts
+  namespace: todo
+  labels:
+    alertmanagerConfig: todo
+spec:
+  route:
+    receiver: email-receiver
+    groupBy: ["alertname", "app"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 12h
+  receivers:
+    - name: email-receiver
+      emailConfigs:
+        - to: sahuankitkumar60@gmail.com,boobalan.a@vvdntech.in
+          from: ankit.sahu@vvdntech.in
+          smarthost: smtp.gmail.com:587
+          authUsername: ankit.sahu@vvdntech.in
+          authPassword:
+            name: alertmanager-smtp-secret
+            key: password
+          requireTLS: true

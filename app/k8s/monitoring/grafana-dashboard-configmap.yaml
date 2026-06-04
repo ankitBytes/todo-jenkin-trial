@@ -16,93 +16,10 @@ data:
       "panels": [
         {
           "id": 1,
-          "title": "Request Rate (req/s)",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "expr": "sum(rate(http_requests_total[2m])) by (route)",
-              "legendFormat": "{{ route }}"
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "title": "Error Rate (5xx %)",
-          "type": "timeseries",
-          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "expr": "100 * sum(rate(http_requests_total{status_code=~\"5..\"}[2m])) / sum(rate(http_requests_total[2m]))",
-              "legendFormat": "5xx %"
-            }
-          ]
-        },
-        {
-          "id": 3,
-          "title": "P95 Latency (s)",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[2m])) by (le, route))",
-              "legendFormat": "p95 {{ route }}"
-            }
-          ]
-        },
-        {
-          "id": 4,
-          "title": "Backend Pods Running",
-          "type": "stat",
-          "gridPos": { "x": 12, "y": 8, "w": 6, "h": 8 },
-          "targets": [
-            {
-              "expr": "count(kube_pod_status_ready{namespace=\"todo\", condition=\"true\", pod=~\"todo-backend.*\"})",
-              "legendFormat": "pods"
-            }
-          ]
-        },
-        {
-          "id": 5,
-          "title": "Backend Memory Usage (MB)",
-          "type": "timeseries",
-          "gridPos": { "x": 18, "y": 8, "w": 6, "h": 8 },
-          "targets": [
-            {
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-backend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
-              "legendFormat": "{{ pod }}"
-            }
-          ]
-        },
-        {
-          "id": 6,
-          "title": "Frontend Pods Running",
-          "type": "stat",
-          "gridPos": { "x": 0, "y": 16, "w": 6, "h": 8 },
-          "targets": [
-            {
-              "expr": "count(kube_pod_status_ready{namespace=\"todo\", condition=\"true\", pod=~\"todo-frontend.*\"})",
-              "legendFormat": "pods"
-            }
-          ]
-        },
-        {
-          "id": 7,
-          "title": "Frontend Memory Usage (MB)",
-          "type": "timeseries",
-          "gridPos": { "x": 6, "y": 16, "w": 6, "h": 8 },
-          "targets": [
-            {
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-frontend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
-              "legendFormat": "{{ pod }}"
-            }
-          ]
-        },
-        {
-          "id": 9,
           "title": "Backend CPU Usage (cores)",
           "type": "timeseries",
-          "gridPos": { "x": 12, "y": 16, "w": 6, "h": 8 },
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
               "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo\", pod=~\"todo-backend.*\", container!=\"\"}[2m])) by (pod)",
@@ -111,50 +28,137 @@ data:
           ]
         },
         {
-          "id": 10,
-          "title": "Pod Restarts",
-          "type": "stat",
-          "gridPos": { "x": 18, "y": 16, "w": 6, "h": 8 },
+          "id": 2,
+          "title": "Frontend CPU Usage (cores)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
-              "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"todo\"}) by (pod)",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo\", pod=~\"todo-frontend.*\", container!=\"\"}[2m])) by (pod)",
               "legendFormat": "{{ pod }}"
             }
           ]
         },
         {
-          "id": 8,
-          "title": "Todo Operations (by method)",
+          "id": 3,
+          "title": "Backend Memory Usage (MB)",
           "type": "timeseries",
-          "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "decmbytes" } },
           "targets": [
             {
-              "expr": "sum(rate(http_requests_total{route=~\"/api/todos.*\"}[2m])) by (method)",
-              "legendFormat": "{{ method }}"
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-backend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
+              "legendFormat": "{{ pod }}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Frontend Memory Usage (MB)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "decmbytes" } },
+          "targets": [
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-frontend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
+              "legendFormat": "{{ pod }}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Backend Pod Restarts",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "targets": [
+            {
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[1h])) by (pod, container)",
+              "legendFormat": "{{ pod }} / {{ container }}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Frontend Pod Restarts",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "targets": [
+            {
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"todo\", pod=~\"todo-frontend.*\"}[1h])) by (pod, container)",
+              "legendFormat": "{{ pod }} / {{ container }}"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Backend Network I/O (KB/s)",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "KBs" } },
+          "targets": [
+            {
+              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[2m])) by (pod) / 1024",
+              "legendFormat": "rx {{ pod }}"
+            },
+            {
+              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[2m])) by (pod) / 1024",
+              "legendFormat": "tx {{ pod }}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "title": "Frontend Network I/O (KB/s)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+          "fieldConfig": { "defaults": { "unit": "KBs" } },
+          "targets": [
+            {
+              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"todo\", pod=~\"todo-frontend.*\"}[2m])) by (pod) / 1024",
+              "legendFormat": "rx {{ pod }}"
+            },
+            {
+              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"todo\", pod=~\"todo-frontend.*\"}[2m])) by (pod) / 1024",
+              "legendFormat": "tx {{ pod }}"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "P95 Latency (s)",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[2m])) by (le, route))",
+              "legendFormat": "p95 {{ route }}"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "title": "Backend Pods Running",
+          "type": "stat",
+          "gridPos": { "x": 12, "y": 32, "w": 6, "h": 8 },
+          "targets": [
+            {
+              "expr": "count(kube_pod_status_ready{namespace=\"todo\", condition=\"true\", pod=~\"todo-backend.*\"})",
+              "legendFormat": "pods"
             }
           ]
         },
         {
           "id": 11,
-          "title": "4xx Client Error Rate",
-          "type": "timeseries",
-          "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+          "title": "Frontend Pods Running",
+          "type": "stat",
+          "gridPos": { "x": 18, "y": 32, "w": 6, "h": 8 },
           "targets": [
             {
-              "expr": "sum(rate(http_requests_total{status_code=~\"4..\"}[2m])) by (route)",
-              "legendFormat": "{{ route }}"
-            }
-          ]
-        },
-        {
-          "id": 12,
-          "title": "Cache Hit Rate",
-          "type": "timeseries",
-          "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
-          "targets": [
-            {
-              "expr": "rate(cache_hits_total[2m]) / (rate(cache_hits_total[2m]) + rate(cache_misses_total[2m]))",
-              "legendFormat": "hit rate"
+              "expr": "count(kube_pod_status_ready{namespace=\"todo\", condition=\"true\", pod=~\"todo-frontend.*\"})",
+              "legendFormat": "pods"
             }
           ]
         }

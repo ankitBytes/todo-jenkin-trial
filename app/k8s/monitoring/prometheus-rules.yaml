@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: todo-app-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: todo-app.cpu
+      rules:
+        - alert: TodoBackendHighCPU
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace="todo", pod=~"todo-backend.*", container!=""}[2m])) by (pod) > 0.05
+          for: 1m
+          labels:
+            severity: warning
+            app: todo-backend
+            namespace: todo
+          annotations:
+            summary: "Backend pod {{ $labels.pod }} high CPU"
+            description: "Pod {{ $labels.pod }} CPU usage is {{ printf \"%.2f\" $value }} cores (threshold: 0.05 cores) for more than 1 minute."
+
+        - alert: TodoFrontendHighCPU
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace="todo", pod=~"todo-frontend.*", container!=""}[2m])) by (pod) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            app: todo-frontend
+            namespace: todo
+          annotations:
+            summary: "Frontend pod {{ $labels.pod }} high CPU"
+            description: "Pod {{ $labels.pod }} CPU usage is {{ printf \"%.2f\" $value }} cores (threshold: 0.8 cores) for more than 5 minutes."
+
+    - name: todo-app.memory
+      rules:
+        - alert: TodoBackendHighMemory
+          expr: |
+            sum(container_memory_working_set_bytes{namespace="todo", pod=~"todo-backend.*", container!=""}) by (pod) / 1024 / 1024 > 512
+          for: 5m
+          labels:
+            severity: warning
+            app: todo-backend
+            namespace: todo
+          annotations:
+            summary: "Backend pod {{ $labels.pod }} high memory"
+            description: "Pod {{ $labels.pod }} memory usage is {{ printf \"%.0f\" $value }} MB (threshold: 512 MB) for more than 5 minutes."
+
+        - alert: TodoFrontendHighMemory
+          expr: |
+            sum(container_memory_working_set_bytes{namespace="todo", pod=~"todo-frontend.*", container!=""}) by (pod) / 1024 / 1024 > 512
+          for: 5m
+          labels:
+            severity: warning
+            app: todo-frontend
+            namespace: todo
+          annotations:
+            summary: "Frontend pod {{ $labels.pod }} high memory"
+            description: "Pod {{ $labels.pod }} memory usage is {{ printf \"%.0f\" $value }} MB (threshold: 512 MB) for more than 5 minutes."
+
+    - name: todo-app.availability
+      rules:
+        - alert: TodoBackendDown
+          expr: |
+            kube_deployment_status_replicas_available{namespace="todo", deployment="todo-backend"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            app: todo-backend
+            namespace: todo
+          annotations:
+            summary: "Todo backend has no available pods"
+            description: "Deployment todo-backend has 0 available replicas for more than 1 minute."
+
+        - alert: TodoFrontendDown
+          expr: |
+            kube_deployment_status_replicas_available{namespace="todo", deployment="todo-frontend"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            app: todo-frontend
+            namespace: todo
+          annotations:
+            summary: "Todo frontend has no available pods"
+            description: "Deployment todo-frontend has 0 available replicas for more than 1 minute."
