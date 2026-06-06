@@ -193,8 +193,8 @@ module "route53" {
   jenkins_alb_zone_id  = var.jenkins_alb_zone_id
 
   grafana_subdomain    = var.grafana_subdomain
-  grafana_alb_dns_name = var.grafana_alb_dns_name
-  grafana_alb_zone_id  = var.grafana_alb_zone_id
+  grafana_alb_dns_name = data.kubernetes_ingress_v1.grafana.status[0].load_balancer[0].ingress[0].hostname
+  grafana_alb_zone_id  = "Z35SXDOTRQ7X7K"
 }
 
 module "alb" {
@@ -260,7 +260,7 @@ resource "helm_release" "kube_prometheus_stack" {
   }
   set {
     name  = "grafana.ingress.hosts[0]"
-    value = "grafana.${var.domain_name}"
+    value = "${var.grafana_subdomain}.${var.domain_name}"
   }
   set {
     name  = "grafana.ingress.annotations.kubernetes\\.io/ingress\\.class"
@@ -274,6 +274,15 @@ resource "helm_release" "kube_prometheus_stack" {
     name  = "grafana.ingress.annotations.alb\\.ingress\\.kubernetes\\.io/target-type"
     value = "ip"
   }
+  values = [<<-EOT
+    grafana:
+      ingress:
+        annotations:
+          alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+          alb.ingress.kubernetes.io/certificate-arn: "${var.certificate_arn}"
+          alb.ingress.kubernetes.io/ssl-redirect: "443"
+  EOT
+  ]
   set {
     name  = "grafana.sidecar.dashboards.enabled"
     value = "true"
@@ -292,4 +301,17 @@ resource "helm_release" "kube_prometheus_stack" {
   }
 
   depends_on = [module.eks]
+}
+
+resource "time_sleep" "wait_for_grafana_alb" {
+  depends_on      = [helm_release.kube_prometheus_stack]
+  create_duration = "120s"
+}
+
+data "kubernetes_ingress_v1" "grafana" {
+  depends_on = [time_sleep.wait_for_grafana_alb]
+  metadata {
+    name      = "kube-prometheus-stack-grafana"
+    namespace = "monitoring"
+  }
 }

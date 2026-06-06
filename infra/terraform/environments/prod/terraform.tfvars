@@ -58,6 +58,4 @@ jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
 
 # ── Monitoring ────────────────────────────────────────────────────────────────
 # Set via: export TF_VAR_grafana_admin_password=...
-grafana_subdomain      = "grafana"
-grafana_alb_dns_name   = "k8s-monitori-kubeprom-3ccd051ce4-1913664347.us-east-1.elb.amazonaws.com"
-grafana_alb_zone_id    = "Z35SXDOTRQ7X7K"
+grafana_subdomain = "grafana"

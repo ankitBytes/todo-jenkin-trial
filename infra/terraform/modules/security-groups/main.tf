@@ -114,3 +114,13 @@ resource "aws_security_group_rule" "alb_to_nodes" {
   source_security_group_id = aws_security_group.alb.id
   description              = "ALB to EKS nodes on app port"
 }
+
+resource "aws_security_group_rule" "nodes_to_nodes" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  security_group_id        = aws_security_group.eks_node.id
+  source_security_group_id = aws_security_group.eks_node.id
+  description              = "Allow all traffic between nodes for pod-to-pod communication"
+}

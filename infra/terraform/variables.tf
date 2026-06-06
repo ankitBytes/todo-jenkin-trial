@@ -251,12 +251,3 @@ variable "grafana_subdomain" {
   default     = "grafana"
 }
 
-variable "grafana_alb_dns_name" {
-  description = "DNS name of the Grafana ALB created by AWS Load Balancer Controller"
-  type        = string
-}
-
-variable "grafana_alb_zone_id" {
-  description = "Canonical hosted zone ID of the Grafana ALB"
-  type        = string
-}
