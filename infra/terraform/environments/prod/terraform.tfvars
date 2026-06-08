@@ -52,6 +52,11 @@ cloudwatch_log_retention_days = 30
 # ── ALB ───────────────────────────────────────────────────────────────────────
 certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7"
 
+# ── EKS API endpoint access ───────────────────────────────────────────────────
+# IMPORTANT: Replace with your office/VPN CIDR before going live.
+# Leaving as 0.0.0.0/0 exposes the Kubernetes API server to the internet.
+eks_public_access_cidrs = ["0.0.0.0/0"]
+
 # ── Jenkins (shared, same as dev) ─────────────────────────────────────────────
 jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.amazonaws.com"
 jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"

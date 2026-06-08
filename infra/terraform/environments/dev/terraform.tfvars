@@ -52,8 +52,12 @@ cloudwatch_log_retention_days = 14
 #ALB
 certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7"
 
+# Restrict to your office or VPN CIDR — replace 0.0.0.0/0 with the actual range
+# Example: ["203.0.113.10/32", "10.10.0.0/16"]
+eks_public_access_cidrs = ["0.0.0.0/0"]
+
 jenkins_subdomain    = "jenkins"
-jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1656756647.us-east-1.elb.amazonaws.com"
+jenkins_alb_dns_name = "k8s-jenkins-jenkins-8be750d9ed-1200327788.us-east-1.elb.amazonaws.com"
 jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
 
 # Monitoring

@@ -16,18 +16,13 @@ pipeline {
         IMAGE_TAG       = "v${BUILD_NUMBER}"
         KUBE_NS         = 'todo'
         TF_DIR          = 'infra/terraform'
-        FIRST_RUN       = "${BUILD_NUMBER == '1' ? 'true' : 'false'}"
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                // Wait for DinD daemon to be ready before any Docker commands
-                retry(15) {
-                    sleep(time: 3, unit: 'SECONDS')
-                    sh 'docker info > /dev/null 2>&1'
-                }
+                // Kaniko builds without a Docker daemon — no DinD readiness check needed
             }
         }
 
@@ -78,6 +73,19 @@ pipeline {
                 }
             }
         }
+        stage('Terraform Approve') {
+            when {
+                anyOf {
+                    expression { params.FORCE_DEPLOY }
+                    expression { env.BUILD_NUMBER == '1' }
+                    changeset 'infra/**'
+                }
+            }
+            steps {
+                input message: 'Review the Terraform plan above. Apply infrastructure changes to PRODUCTION?',
+                      ok: 'Apply to Production'
+            }
+        }
         stage('Terraform Apply') {
             when {
                 anyOf {
@@ -106,25 +114,98 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-creds']]) {
                     sh """
-                        terraform -chdir=${TF_DIR} init -input=false
+                        terraform -chdir=${TF_DIR} init -backend-config=environments/prod/backend.tf -input=false
                         aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
 
                         FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
                         BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
                         BACKEND_IRSA_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw todo_backend_irsa_role_arn)
                         SECRET_NAME=\$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
+                        LBC_ROLE_ARN=\$(terraform -chdir=${TF_DIR} output -raw eks_alb_controller_role_arn)
+                        VPC_ID=\$(terraform -chdir=${TF_DIR} output -raw vpc_id)
+                        ALB_NAME=\$(terraform -chdir=${TF_DIR} output -raw alb_name)
+                        CERT_ARN=\$(terraform -chdir=${TF_DIR} output -raw certificate_arn)
+                        APP_HOST=\$(terraform -chdir=${TF_DIR} output -raw app_url | sed 's|https://||')
 
-                        sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \
-                            -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \
-                            app/k8s/targetgroupbinding.yaml | kubectl apply -f -
+                        # Validate critical outputs before proceeding
+                        [ -n "\$SECRET_NAME" ]           || { echo "ERROR: empty SECRET_NAME";           exit 1; }
+                        [ -n "\$BACKEND_IRSA_ROLE_ARN" ] || { echo "ERROR: empty BACKEND_IRSA_ROLE_ARN"; exit 1; }
+                        [ -n "\$FRONTEND_TG_ARN" ]       || { echo "ERROR: empty FRONTEND_TG_ARN";       exit 1; }
+                        [ -n "\$ALB_NAME" ]              || { echo "ERROR: empty ALB_NAME";              exit 1; }
+                        [ -n "\$CERT_ARN" ]              || { echo "ERROR: empty CERT_ARN";              exit 1; }
 
-                        sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \
+                        # Ensure AWS Load Balancer Controller is installed (idempotent)
+                        helm repo add eks https://aws.github.io/eks-charts || true
+                        helm repo update eks
+                        helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \\
+                            -n kube-system \\
+                            --version 1.8.4 \\
+                            --set clusterName=${EKS_CLUSTER} \\
+                            --set serviceAccount.create=true \\
+                            --set serviceAccount.name=aws-load-balancer-controller \\
+                            --set "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=\${LBC_ROLE_ARN}" \\
+                            --set vpcId=\${VPC_ID} \\
+                            --set region=${AWS_REGION}
+
+                        # Core namespace and config (idempotent)
+                        kubectl apply -f app/k8s/namespace.yaml
+                        kubectl apply -f app/k8s/configmap.yaml
+                        kubectl apply -f app/k8s/networkpolicy.yaml
+
+                        sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \\
                             app/k8s/serviceaccount.yaml | kubectl apply -f -
 
-                        sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \
+                        sed "s|__SECRET_NAME__|\${SECRET_NAME}|g" \\
                             app/k8s/secretproviderclass.yaml | kubectl apply -f -
+                    """
 
-                        kubectl apply -f app/k8s/monitoring/
+                    // Pre-seed todo-secret with real values to break the CSI driver
+                    // bootstrapping dependency. Credentials are fetched via IRSA and
+                    // never written to disk or shown in build logs.
+                    sh '''set +x
+                        DB_HOST=$(terraform -chdir=${TF_DIR} output -raw rds_endpoint | cut -d: -f1 | tr -d '\\n')
+                        REDIS_HOST=$(terraform -chdir=${TF_DIR} output -raw redis_primary_endpoint | cut -d: -f1 | tr -d '\\n')
+                        SECRET_NAME=$(terraform -chdir=${TF_DIR} output -raw secrets_manager_secret_name)
+                        SECRET_JSON=$(aws secretsmanager get-secret-value \
+                            --secret-id "$SECRET_NAME" \
+                            --query SecretString --output text)
+                        DB_PASSWORD=$(printf '%s' "$SECRET_JSON" | \
+                            python3 -c "import json,sys; print(json.load(sys.stdin)[\'DB_PASSWORD\'])")
+                        DB_USER=$(printf '%s' "$SECRET_JSON" | \
+                            python3 -c "import json,sys; print(json.load(sys.stdin)[\'DB_USER\'])")
+                        DB_NAME=$(printf '%s' "$SECRET_JSON" | \
+                            python3 -c "import json,sys; print(json.load(sys.stdin)[\'DB_NAME\'])")
+                        kubectl create secret generic todo-secret \
+                            --namespace ${KUBE_NS} \
+                            --from-literal=DB_HOST="$DB_HOST" \
+                            --from-literal=DB_PORT="3306" \
+                            --from-literal=DB_USER="$DB_USER" \
+                            --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+                            --from-literal=DB_NAME="$DB_NAME" \
+                            --from-literal=REDIS_HOST="$REDIS_HOST" \
+                            --from-literal=REDIS_PORT="6379" \
+                            --dry-run=client -o yaml | kubectl apply -f -
+                    set +x'''
+
+                    sh """
+                        # App workloads
+                        kubectl apply -f app/k8s/deployment.yaml
+                        kubectl apply -f app/k8s/service.yaml
+                        kubectl apply -f app/k8s/hpa.yaml
+                        kubectl apply -f app/k8s/pdb.yaml
+
+                        sed -e "s|__FRONTEND_TG_ARN__|\${FRONTEND_TG_ARN}|g" \\
+                            -e "s|__BACKEND_TG_ARN__|\${BACKEND_TG_ARN}|g" \\
+                            app/k8s/targetgroupbinding.yaml | kubectl apply -f -
+
+                        sed -e "s|__ALB_NAME__|\${ALB_NAME}|g" \\
+                            -e "s|__CERT_ARN__|\${CERT_ARN}|g" \\
+                            -e "s|__APP_HOST__|\${APP_HOST}|g" \\
+                            app/k8s/ingress.yaml | kubectl apply -f -
+
+                        kubectl apply -f app/k8s/monitoring/alertmanager-email.yaml
+                        kubectl apply -f app/k8s/monitoring/alertmanager-smtp-secret.yaml
+                        sed "s/__APP_ENV__/prod/g" app/k8s/monitoring/prometheus-rules.yaml | kubectl apply -f -
                     """
                 }
             }
@@ -135,7 +216,7 @@ pipeline {
             parallel {
                 stage('Frontend') {
                     stages {
-                        stage('Build Frontend') {
+                        stage('Build & Push Frontend') {
                             when {
                                 anyOf {
                                     expression { params.FORCE_DEPLOY }
@@ -144,32 +225,14 @@ pipeline {
                                 }
                             }
                             steps {
-                                sh """
-                                    docker build \\
-                                        -f app/docker/Dockerfile.frontend \\
-                                        -t ${ECR_FRONTEND}:${IMAGE_TAG} \\
-                                        app/frontend/
-                                """
-                            }
-                        }
-                        stage('Push Frontend') {
-                            when {
-                                anyOf {
-                                    expression { params.FORCE_DEPLOY }
-                                    expression { env.BUILD_NUMBER == '1' }
-                                    changeset 'app/frontend/**'
-                                }
-                            }
-                            steps {
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                                  credentialsId: 'aws-creds']]) {
-                                    sh """
-                                        aws ecr get-login-password --region ${AWS_REGION} | \\
-                                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                                        docker push ${ECR_FRONTEND}:${IMAGE_TAG}
-                                        docker tag ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest
-                                        docker push ${ECR_FRONTEND}:latest
-                                    """
+                                container('kaniko') {
+                                    sh """/kaniko/executor \\
+                                        --context=dir://${WORKSPACE}/app/frontend \\
+                                        --dockerfile=${WORKSPACE}/app/docker/Dockerfile.frontend \\
+                                        --destination=${ECR_FRONTEND}:${IMAGE_TAG} \\
+                                        --destination=${ECR_FRONTEND}:latest \\
+                                        --snapshotMode=redo \\
+                                        --log-format=text"""
                                 }
                             }
                         }
@@ -202,7 +265,7 @@ pipeline {
 
                 stage('Backend') {
                     stages {
-                        stage('Build Backend') {
+                        stage('Build & Push Backend') {
                             when {
                                 anyOf {
                                     expression { params.FORCE_DEPLOY }
@@ -211,32 +274,14 @@ pipeline {
                                 }
                             }
                             steps {
-                                sh """
-                                    docker build \\
-                                        -f app/docker/Dockerfile.backend \\
-                                        -t ${ECR_BACKEND}:${IMAGE_TAG} \\
-                                        app/backend/
-                                """
-                            }
-                        }
-                        stage('Push Backend') {
-                            when {
-                                anyOf {
-                                    expression { params.FORCE_DEPLOY }
-                                    expression { env.BUILD_NUMBER == '1' }
-                                    changeset 'app/backend/**'
-                                }
-                            }
-                            steps {
-                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                                  credentialsId: 'aws-creds']]) {
-                                    sh """
-                                        aws ecr get-login-password --region ${AWS_REGION} | \\
-                                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                                        docker push ${ECR_BACKEND}:${IMAGE_TAG}
-                                        docker tag ${ECR_BACKEND}:${IMAGE_TAG} ${ECR_BACKEND}:latest
-                                        docker push ${ECR_BACKEND}:latest
-                                    """
+                                container('kaniko') {
+                                    sh """/kaniko/executor \\
+                                        --context=dir://${WORKSPACE}/app/backend \\
+                                        --dockerfile=${WORKSPACE}/app/docker/Dockerfile.backend \\
+                                        --destination=${ECR_BACKEND}:${IMAGE_TAG} \\
+                                        --destination=${ECR_BACKEND}:latest \\
+                                        --snapshotMode=redo \\
+                                        --log-format=text"""
                                 }
                             }
                         }
@@ -272,11 +317,8 @@ pipeline {
         // ── Cleanup ─────────────────────────────────────────────────────────
         stage('Cleanup') {
             steps {
-                sh """
-                    docker rmi ${ECR_FRONTEND}:${IMAGE_TAG} ${ECR_FRONTEND}:latest || true
-                    docker rmi ${ECR_BACKEND}:${IMAGE_TAG}  ${ECR_BACKEND}:latest  || true
-                    rm -f ${TF_DIR}/tfplan || true
-                """
+                // No docker rmi needed — Kaniko pushes directly to ECR, no local images
+                sh "rm -f ${TF_DIR}/tfplan || true"
             }
         }
     }

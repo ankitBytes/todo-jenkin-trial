@@ -87,6 +87,7 @@ module "eks" {
   node_min_size          = var.eks_node_min_size
   node_max_size          = var.eks_node_max_size
   node_security_group_id = module.security_groups.eks_node_sg_id
+  public_access_cidrs    = var.eks_public_access_cidrs
 
   depends_on = [module.cloudwatch]
 }

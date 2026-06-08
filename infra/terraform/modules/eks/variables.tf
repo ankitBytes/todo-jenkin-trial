@@ -9,3 +9,9 @@ variable "node_desired_size" { type = number }
 variable "node_min_size" { type = number }
 variable "node_max_size" { type = number }
 variable "node_security_group_id" { type = string }
+
+variable "public_access_cidrs" {
+  description = "CIDR blocks permitted to reach the public EKS API endpoint. Restrict to office/VPN CIDRs in production."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}

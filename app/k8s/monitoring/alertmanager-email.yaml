@@ -23,3 +23,129 @@ spec:
             name: alertmanager-smtp-secret
             key: password
           requireTLS: true
+          sendResolved: true
+          headers:
+            - key: Subject
+              value: >-
+                {{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[{{ .CommonLabels.severity | toUpper }}]{{ end }} Todo Application — {{ .CommonAnnotations.summary }}
+          html: |
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                body { margin: 0; padding: 20px; background: #f3f4f6; font-family: Arial, Helvetica, sans-serif; color: #1f2937; }
+                .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.1); }
+                .banner { padding: 28px 32px; color: #ffffff; }
+                .banner-warning  { background: #d97706; }
+                .banner-critical { background: #dc2626; }
+                .banner-resolved { background: #16a34a; }
+                .banner h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; }
+                .banner p  { margin: 0; font-size: 14px; opacity: 0.92; }
+                .body { padding: 28px 32px; }
+                .intro { font-size: 14px; color: #374151; margin: 0 0 22px; }
+                .info-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px; }
+                .info-table td { padding: 10px 0; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+                .info-table td:first-child { width: 150px; color: #6b7280; font-weight: 600; }
+                .detail-box { padding: 16px 18px; border-radius: 4px; font-size: 14px; line-height: 1.65; border-left: 4px solid; margin-bottom: 22px; }
+                .detail-warning  { background: #fffbeb; border-color: #d97706; color: #78350f; }
+                .detail-critical { background: #fef2f2; border-color: #dc2626; color: #7f1d1d; }
+                .detail-resolved { background: #f0fdf4; border-color: #16a34a; color: #14532d; }
+                .note { background: #eff6ff; border-radius: 4px; padding: 14px 18px; font-size: 13px; color: #1e40af; line-height: 1.6; }
+                .footer { padding: 18px 32px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; }
+              </style>
+            </head>
+            <body>
+            <div class="container">
+
+              {{ if eq .Status "resolved" -}}
+              <div class="banner banner-resolved">
+                <h1>Alert Resolved</h1>
+                <p>The performance alert for your Todo Application has been resolved.</p>
+              </div>
+              {{- else if eq .CommonLabels.severity "critical" -}}
+              <div class="banner banner-critical">
+                <h1>Critical Alert</h1>
+                <p>A critical issue has been detected in your Todo Application.</p>
+              </div>
+              {{- else -}}
+              <div class="banner banner-warning">
+                <h1>Performance Alert</h1>
+                <p>A performance threshold has been exceeded in your Todo Application.</p>
+              </div>
+              {{- end }}
+
+              <div class="body">
+                <p class="intro">
+                  Hi,<br><br>
+                  {{ if eq .Status "resolved" -}}
+                  We are pleased to inform you that the alert for your Todo Application has been resolved and the service is operating normally.
+                  {{- else -}}
+                  An alert has been triggered for your <strong>Todo Application</strong>
+                  {{- end }}
+                </p>
+
+                <table class="info-table">
+                  <tr>
+                    <td>Service</td>
+                    <td>
+                      {{ if eq .CommonLabels.app "todo-backend" }}Todo Backend Service
+                      {{ else if eq .CommonLabels.app "todo-frontend" }}Todo Frontend Service
+                      {{ else }}Todo Application{{ end }}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Environment</td>
+                    <td>{{ .CommonLabels.env }}</td>
+                  </tr>
+                  <tr>
+                    <td>Namespace</td>
+                    <td>{{ .CommonLabels.namespace }}</td>
+                  </tr>
+                  <tr>
+                    <td>Alert</td>
+                    <td>{{ .CommonAnnotations.summary }}</td>
+                  </tr>
+                  <tr>
+                    <td>Severity</td>
+                    <td>{{ .CommonLabels.severity | title }}</td>
+                  </tr>
+                  <tr>
+                    <td>Status</td>
+                    <td>{{ .Status | title }}</td>
+                  </tr>
+                  {{ if gt (len .Alerts.Firing) 0 -}}
+                  <tr>
+                    <td>Affected Pods</td>
+                    <td>{{ range .Alerts.Firing }}{{ .Labels.pod }}<br>{{ end }}</td>
+                  </tr>
+                  {{- end }}
+                  <tr>
+                    <td>CPU Used %</td>
+                    <td>{{ range .Alerts.Firing }}{{ .Labels.pod }}<br>{{ end }}</td>
+                  </tr>
+                </table>
+
+                {{ with index .Alerts.Firing 0 -}}
+                <div class="detail-box detail-{{ $.CommonLabels.severity }}">
+                  <strong>Details:</strong><br>
+                  {{ .Annotations.description }}
+                </div>
+                {{- end }}
+
+                {{ if eq .Status "resolved" -}}
+                <div class="note">
+                  The alert has cleared and your application is now running normally. No further action is required. If you continue to experience issues, please contact our support team.
+                </div>
+                {{- end }}
+              </div>
+
+              <div class="footer">
+                This is an automated notification from the Todo Application monitoring system.
+                &nbsp;&nbsp;|&nbsp;&nbsp; Please do not reply to this email.
+              </div>
+
+            </div>
+            </body>
+            </html>

@@ -34,6 +34,9 @@ resource "aws_eks_cluster" "main" {
     subnet_ids              = var.private_subnet_ids
     endpoint_private_access = true
     endpoint_public_access  = true
+    # Restrict to known CIDRs. Set eks_public_access_cidrs in terraform.tfvars
+    # to your office/VPN range instead of the default 0.0.0.0/0.
+    public_access_cidrs     = var.public_access_cidrs
   }
 
   # Logs are received by the pre-created CloudWatch log group /aws/eks/<name>/cluster

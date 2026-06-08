@@ -78,6 +78,12 @@ variable "eks_node_max_size" {
   default = 4
 }
 
+variable "eks_public_access_cidrs" {
+  description = "CIDR blocks permitted to reach the EKS API public endpoint. Restrict to your office/VPN range in production (never leave as 0.0.0.0/0 in prod)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 # ── ECR ───────────────────────────────────────────────────────────────────────
 
 variable "ecr_frontend_repo_name" {

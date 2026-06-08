@@ -1,3 +1,8 @@
+output "alb_name" {
+  description = "Name of the load balancer"
+  value       = aws_lb.main.name
+}
+
 output "alb_arn" {
   description = "ARN of the load balancer"
   value       = aws_lb.main.arn

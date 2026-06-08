@@ -8,56 +8,60 @@ metadata:
 spec:
   groups:
     - name: todo-app.cpu
-      rules:
+      rules: 
         - alert: TodoBackendHighCPU
           expr: |
-            sum(rate(container_cpu_usage_seconds_total{namespace="todo", pod=~"todo-backend.*", container!=""}[2m])) by (pod) > 0.05
+            sum(rate(container_cpu_usage_seconds_total{namespace="todo", pod=~"todo-backend.*", container!=""}[2m])) by (pod) / 0.3 * 100 > 80
           for: 1m
           labels:
             severity: warning
             app: todo-backend
             namespace: todo
+            env: __APP_ENV__
           annotations:
-            summary: "Backend pod {{ $labels.pod }} high CPU"
-            description: "Pod {{ $labels.pod }} CPU usage is {{ printf \"%.2f\" $value }} cores (threshold: 0.05 cores) for more than 1 minute."
+            summary: "Todo Backend Service - Elevated CPU Usage"
+            description: "The backend service CPU usage is at {{ printf \"%.0f\" $value }}% of the allowed threshold (threshold: 0.05 cores)."
 
         - alert: TodoFrontendHighCPU
           expr: |
-            sum(rate(container_cpu_usage_seconds_total{namespace="todo", pod=~"todo-frontend.*", container!=""}[2m])) by (pod) > 0.8
+            sum(rate(container_cpu_usage_seconds_total{namespace="todo", pod=~"todo-frontend.*", container!=""}[2m])) by (pod) / 0.8 * 100 > 100
           for: 5m
           labels:
             severity: warning
             app: todo-frontend
             namespace: todo
+            env: __APP_ENV__
           annotations:
-            summary: "Frontend pod {{ $labels.pod }} high CPU"
-            description: "Pod {{ $labels.pod }} CPU usage is {{ printf \"%.2f\" $value }} cores (threshold: 0.8 cores) for more than 5 minutes."
+            summary: "Todo Frontend Service - Elevated CPU Usage"
+            description: "The frontend service CPU usage is at {{ printf \"%.0f\" $value }}% of the allowed threshold (threshold: 0.8 cores)."
 
     - name: todo-app.memory
       rules:
         - alert: TodoBackendHighMemory
           expr: |
-            sum(container_memory_working_set_bytes{namespace="todo", pod=~"todo-backend.*", container!=""}) by (pod) / 1024 / 1024 > 512
+            sum(container_memory_working_set_bytes{namespace="todo", pod=~"todo-backend.*", container!=""}) by (pod) / 1024 / 1024 / 512 * 100 > 80
           for: 5m
           labels:
             severity: warning
             app: todo-backend
             namespace: todo
+            env: __APP_ENV__
           annotations:
-            summary: "Backend pod {{ $labels.pod }} high memory"
-            description: "Pod {{ $labels.pod }} memory usage is {{ printf \"%.0f\" $value }} MB (threshold: 512 MB) for more than 5 minutes."
+            summary: "Todo Backend Service - High Memory Usage"
+            description: "The backend service memory usage is at {{ printf \"%.0f\" $value }}% of the allowed threshold (threshold: 512 MB)."
 
         - alert: TodoFrontendHighMemory
           expr: |
-            sum(container_memory_working_set_bytes{namespace="todo", pod=~"todo-frontend.*", container!=""}) by (pod) / 1024 / 1024 > 512
+            sum(container_memory_working_set_bytes{namespace="todo", pod=~"todo-frontend.*", container!=""}) by (pod) / 1024 / 1024 / 512 * 100 > 100
           for: 5m
           labels:
             severity: warning
             app: todo-frontend
             namespace: todo
+            env: __APP_ENV__
           annotations:
-            summary: "Frontend pod {{ $labels.pod }} high memory"
-            description: "Pod {{ $labels.pod }} memory usage is {{ printf \"%.0f\" $value }} MB (threshold: 512 MB) for more than 5 minutes."
+            summary: "Todo Frontend Service - High Memory Usage"
+            description: "The frontend service memory usage is at {{ printf \"%.0f\" $value }}% of the allowed threshold (threshold: 512 MB)."
 
     - name: todo-app.availability
       rules:
@@ -69,9 +73,10 @@ spec:
             severity: critical
             app: todo-backend
             namespace: todo
+            env: __APP_ENV__
           annotations:
-            summary: "Todo backend has no available pods"
-            description: "Deployment todo-backend has 0 available replicas for more than 1 minute."
+            summary: "Todo Backend Service - Service Unavailable"
+            description: "The Todo backend service is currently unavailable. All running instances are down and the service is not accepting requests."
 
         - alert: TodoFrontendDown
           expr: |
@@ -81,6 +86,7 @@ spec:
             severity: critical
             app: todo-frontend
             namespace: todo
+            env: __APP_ENV__
           annotations:
-            summary: "Todo frontend has no available pods"
-            description: "Deployment todo-frontend has 0 available replicas for more than 1 minute."
+            summary: "Todo Frontend Service - Service Unavailable"
+            description: "The Todo frontend service is currently unavailable. All running instances are down and users are unable to access the application."

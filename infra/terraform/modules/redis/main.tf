@@ -26,7 +26,9 @@ resource "aws_elasticache_replication_group" "main" {
   automatic_failover_enabled = var.num_cache_nodes > 1
 
   at_rest_encryption_enabled = true
-  transit_encryption_enabled = false
+  # NOTE: Changing this on an existing cluster forces replacement (ElastiCache
+  # does not support in-place encryption changes). Plan a maintenance window.
+  transit_encryption_enabled = true
 
   apply_immediately = true
 

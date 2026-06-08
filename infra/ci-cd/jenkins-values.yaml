@@ -1,3 +1,5 @@
+# Helm chart: jenkins/jenkins 5.9.22 (Jenkins 2.555.2-jdk17)
+# Install: helm upgrade --install jenkins jenkins/jenkins -n jenkins --version 5.9.22 -f this-file --set controller.admin.password=<pw>
 controller:
   # Set password at install time:
   #   --set controller.admin.password=<your-password>
@@ -36,6 +38,7 @@ controller:
     - aws-credentials
     - credentials-binding
     - pipeline-stage-view
+    - configuration-as-code
 
 serviceAccount:
   create: true
@@ -60,28 +63,30 @@ agent:
     repository: 668076964228.dkr.ecr.us-east-1.amazonaws.com/jenkins-agent
     tag: latest
 
-  # DOCKER_HOST points to the DinD sidecar running in the same pod
-  envVars:
-    - name: DOCKER_HOST
-      value: tcp://localhost:2375
-
-  # DinD sidecar — provides the Docker daemon for docker build/push
+  # Kaniko sidecar replaces the privileged DinD container for rootless image builds.
+  # The IRSA token (AWS_WEB_IDENTITY_TOKEN_FILE, AWS_ROLE_ARN) is injected into all
+  # containers in the pod by the EKS pod identity webhook — Kaniko uses it to
+  # authenticate to ECR without any stored credentials.
   yamlTemplate: |
     spec:
       containers:
-      - name: dind
-        image: docker:24-dind
-        securityContext:
-          privileged: true
+      - name: kaniko
+        image: gcr.io/kaniko-project/executor:v1.23.2-debug
+        # Keep the container alive; the build is triggered via container('kaniko') steps
+        command: ["/busybox/cat"]
+        tty: true
         env:
-        - name: DOCKER_TLS_CERTDIR
-          value: ""
-        volumeMounts:
-        - name: docker-graph
-          mountPath: /var/lib/docker
-      volumes:
-      - name: docker-graph
-        emptyDir: {}
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
 
 serviceAccountAgent:
   create: false

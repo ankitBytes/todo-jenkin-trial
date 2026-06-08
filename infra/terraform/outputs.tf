@@ -75,6 +75,16 @@ output "apex_app_url" {
   value       = "https://${var.domain_name}"
 }
 
+output "alb_name" {
+  description = "ALB name"
+  value       = module.alb.alb_name
+}
+
+output "certificate_arn" {
+  description = "ACM certificate ARN used by the ALB HTTPS listener"
+  value       = var.certificate_arn
+}
+
 output "alb_arn" {
   description = "ALB ARN"
   value       = module.alb.alb_arn
