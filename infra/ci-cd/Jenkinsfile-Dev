@@ -3,8 +3,13 @@ pipeline {
         label 'jenkins-agent'
     }
 
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
     parameters {
-        booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Force all stages (frontend, backend, terraform) regardless of changeset')
+        booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Force all stages (frontend, backend, terraform) regardless of changeset'),
         booleanParam(name: 'SKIP_JENKINS_INFRA', defaultValue: false, description: 'Skip Jenkins IRSA and EKS node group changes to avoid self-disruption')
     }
 
@@ -271,6 +276,11 @@ pipeline {
 
     post {
         success { echo "Pipeline ${IMAGE_TAG} completed successfully." }
-        failure { echo 'Pipeline failed — check stage logs above.' }
+        failure {
+            echo 'Pipeline failed — check stage logs above.'
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                sh "terraform -chdir=${TF_DIR} force-unlock -force \$(terraform -chdir=${TF_DIR} show-lock-id 2>/dev/null) || true"
+            }
+        }
     }
 }
