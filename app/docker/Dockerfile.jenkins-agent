@@ -17,6 +17,10 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tm
 RUN curl -fsSL "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl" \
     -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl
 
+# python - Used for parsing the secrets into plain text
+RUN apt-get update && apt-get install -y python3 --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # helm
 RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 

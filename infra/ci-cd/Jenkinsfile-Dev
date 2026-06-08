@@ -162,6 +162,13 @@ pipeline {
                     set +x'''
 
                     sh """
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                        FRONTEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw frontend_tg_arn)
+                        BACKEND_TG_ARN=\$(terraform -chdir=${TF_DIR} output -raw backend_tg_arn)
+                        ALB_NAME=\$(terraform -chdir=${TF_DIR} output -raw alb_name)
+                        CERT_ARN=\$(terraform -chdir=${TF_DIR} output -raw certificate_arn)
+                        APP_HOST=\$(terraform -chdir=${TF_DIR} output -raw app_url | sed 's|https://||')
+                        
                         # App workloads
                         kubectl apply -f app/k8s/deployment.yaml
                         kubectl apply -f app/k8s/service.yaml
