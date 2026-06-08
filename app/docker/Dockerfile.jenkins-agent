@@ -17,6 +17,9 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tm
 RUN curl -fsSL "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl" \
     -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl
 
+# helm
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
 # Terraform 1.10 — jar extracts zip format natively
 RUN curl -fsSL \
         "https://releases.hashicorp.com/terraform/1.10.3/terraform_1.10.3_linux_amd64.zip" \
