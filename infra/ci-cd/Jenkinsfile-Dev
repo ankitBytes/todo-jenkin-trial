@@ -9,7 +9,7 @@ pipeline {
     }
 
     parameters {
-        booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Force all stages (frontend, backend, terraform) regardless of changeset'),
+        booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Force all stages (frontend, backend, terraform) regardless of changeset')
         booleanParam(name: 'SKIP_JENKINS_INFRA', defaultValue: false, description: 'Skip Jenkins IRSA and EKS node group changes to avoid self-disruption')
     }
 
