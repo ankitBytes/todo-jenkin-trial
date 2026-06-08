@@ -58,6 +58,14 @@ agent:
     - jenkins-agent
   serviceAccount: jenkins
   websocket: true
+  alwaysPullImage: true
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
   # Custom image built from app/docker/Dockerfile.jenkins-agent and pushed to ECR
   image:
     repository: 668076964228.dkr.ecr.us-east-1.amazonaws.com/jenkins-agent
