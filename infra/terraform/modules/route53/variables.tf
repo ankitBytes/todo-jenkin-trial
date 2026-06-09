@@ -20,3 +20,7 @@ variable "create_apex_record" {
   type    = bool
   default = true
 }
+variable "create_grafana_record" {
+  type    = bool
+  default = true
+}

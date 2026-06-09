@@ -1,3 +1,13 @@
+# State migration: apex and grafana records now use count; remap old bare addresses.
+moved {
+  from = aws_route53_record.apex
+  to   = aws_route53_record.apex[0]
+}
+moved {
+  from = aws_route53_record.grafana
+  to   = aws_route53_record.grafana[0]
+}
+
 # Looks up the hosted zone that must already exist in Route53.
 data "aws_route53_zone" "main" {
   name         = var.domain_name
@@ -42,7 +52,7 @@ resource "aws_route53_record" "jenkins" {
 }
 
 resource "aws_route53_record" "grafana" {
-  count   = var.grafana_alb_dns_name != "" ? 1 : 0
+  count   = var.create_grafana_record ? 1 : 0
   zone_id = data.aws_route53_zone.main.zone_id
   name    = "${var.grafana_subdomain}.${var.domain_name}"
   type    = "A"

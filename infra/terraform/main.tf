@@ -197,7 +197,8 @@ module "route53" {
   grafana_alb_dns_name = try(data.kubernetes_ingress_v1.grafana.status[0].load_balancer[0].ingress[0].hostname, "")
   grafana_alb_zone_id  = "Z35SXDOTRQ7X7K"
 
-  create_apex_record = var.create_apex_record
+  create_apex_record    = var.create_apex_record
+  create_grafana_record = var.create_grafana_record
 }
 
 module "alb" {
