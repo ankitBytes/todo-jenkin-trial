@@ -122,7 +122,7 @@ pipeline {
 
                         # Core namespace and config (idempotent)
                         kubectl apply -f app/k8s/namespace.yaml
-                        kubectl apply -f app/k8s/configmap.yaml
+                        sed "s|__ALLOWED_ORIGIN__|https://\${APP_HOST}|g" app/k8s/configmap.yaml | kubectl apply -f -
                         kubectl apply -f app/k8s/networkpolicy.yaml
 
                         sed "s|__BACKEND_IRSA_ROLE_ARN__|\${BACKEND_IRSA_ROLE_ARN}|g" \\
@@ -168,7 +168,7 @@ pipeline {
                         ALB_NAME=\$(terraform -chdir=${TF_DIR} output -raw alb_name)
                         CERT_ARN=\$(terraform -chdir=${TF_DIR} output -raw certificate_arn)
                         APP_HOST=\$(terraform -chdir=${TF_DIR} output -raw app_url | sed 's|https://||')
-                        
+
                         # App workloads
                         kubectl apply -f app/k8s/deployment.yaml
                         kubectl apply -f app/k8s/service.yaml

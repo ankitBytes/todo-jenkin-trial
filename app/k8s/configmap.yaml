@@ -6,4 +6,4 @@ metadata:
 data:
   PORT: "3000"
   DB_NAME: "todo_db"
-  ALLOWED_ORIGIN: "https://dev.ankit.services"
+  ALLOWED_ORIGIN: __ALLOWED_ORIGIN__
