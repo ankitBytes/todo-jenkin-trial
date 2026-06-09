@@ -79,20 +79,20 @@ pipeline {
                 }
             }
         }
-        stage('Terraform Approve') {
-            agent none
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { env.BUILD_NUMBER == '1' }
-                    changeset 'infra/**'
-                }
-            }
-            steps {
-                input message: 'Review the Terraform plan above. Apply infrastructure changes to PRODUCTION?',
-                      ok: 'Apply to Production'
-            }
-        }
+        // stage('Terraform Approve') {
+        //     agent none
+        //     when {
+        //         anyOf {
+        //             expression { params.FORCE_DEPLOY }
+        //             expression { env.BUILD_NUMBER == '1' }
+        //             changeset 'infra/**'
+        //         }
+        //     }
+        //     steps {
+        //         input message: 'Review the Terraform plan above. Apply infrastructure changes to PRODUCTION?',
+        //               ok: 'Apply to Production'
+        //     }
+        // }
         stage('Terraform Apply') {
             when {
                 anyOf {
