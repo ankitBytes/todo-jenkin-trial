@@ -80,6 +80,7 @@ pipeline {
             }
         }
         stage('Terraform Approve') {
+            agent none
             when {
                 anyOf {
                     expression { params.FORCE_DEPLOY }
