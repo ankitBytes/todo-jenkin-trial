@@ -65,4 +65,4 @@ jenkins_alb_zone_id  = "Z35SXDOTRQ7X7K"
 # Set via: export TF_VAR_grafana_admin_password=...
 grafana_subdomain  = "grafana"
 create_apex_record    = false
-create_grafana_record = false
+create_grafana_record = true
