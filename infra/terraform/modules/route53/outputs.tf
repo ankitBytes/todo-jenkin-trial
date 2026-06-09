@@ -10,7 +10,7 @@ output "app_fqdn" {
 
 output "apex_record_fqdn" {
   description = "FQDN of the created apex Route53 A record"
-  value       = aws_route53_record.apex.fqdn
+  value       = length(aws_route53_record.apex) > 0 ? aws_route53_record.apex[0].fqdn : var.domain_name
 }
 
 output "record_fqdn" {
