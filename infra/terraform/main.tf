@@ -194,8 +194,10 @@ module "route53" {
   jenkins_alb_zone_id  = var.jenkins_alb_zone_id
 
   grafana_subdomain    = var.grafana_subdomain
-  grafana_alb_dns_name = data.kubernetes_ingress_v1.grafana.status[0].load_balancer[0].ingress[0].hostname
+  grafana_alb_dns_name = try(data.kubernetes_ingress_v1.grafana.status[0].load_balancer[0].ingress[0].hostname, "")
   grafana_alb_zone_id  = "Z35SXDOTRQ7X7K"
+
+  create_apex_record = var.create_apex_record
 }
 
 module "alb" {
@@ -306,7 +308,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
 resource "time_sleep" "wait_for_grafana_alb" {
   depends_on      = [helm_release.kube_prometheus_stack]
-  create_duration = "120s"
+  create_duration = "300s"
 }
 
 data "kubernetes_ingress_v1" "grafana" {

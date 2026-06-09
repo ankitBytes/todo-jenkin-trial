@@ -11,5 +11,12 @@ variable "grafana_subdomain" {
   type    = string
   default = "grafana"
 }
-variable "grafana_alb_dns_name" { type = string }
+variable "grafana_alb_dns_name" {
+  type    = string
+  default = ""
+}
 variable "grafana_alb_zone_id" { type = string }
+variable "create_apex_record" {
+  type    = bool
+  default = true
+}
