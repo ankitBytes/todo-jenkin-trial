@@ -73,7 +73,7 @@ pipeline {
                         fi
                         terraform -chdir=${TF_DIR} plan \
                             \$TARGETS \
-                            -var-file=environments/dev/terraform.tfvars \
+                            -var-file=environments/prod/terraform.tfvars \
                             -out=tfplan -input=false
                     """
                 }
