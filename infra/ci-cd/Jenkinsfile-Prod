@@ -67,10 +67,6 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-creds']]) {
                     sh """
-                        TARGETS=""
-                        if [ "${params.SKIP_JENKINS_INFRA}" = "true" ]; then
-                            TARGETS="-target=module.vpc -target=module.alb -target=module.asg -target=module.autoscalling -target=module.cloudwatch -target=module.ecr_frontend -target=module.ecr_backend -target=module.rds -target=module.redis -target=module.route53 -target=module.s3 -target=module.secrets_manager -target=module.security_groups"
-                        fi
                         terraform -chdir=${TF_DIR} plan \
                             \$TARGETS \
                             -var-file=environments/prod/terraform.tfvars \

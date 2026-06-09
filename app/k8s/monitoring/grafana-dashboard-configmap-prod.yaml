@@ -22,7 +22,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo-prod\", pod=~\"todo-backend.*\", container!=\"\"}[2m])) by (pod)",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo\", pod=~\"todo-backend.*\", container!=\"\"}[2m])) by (pod)",
               "legendFormat": "{{ pod }}"
             }
           ]
@@ -35,7 +35,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo-prod\", pod=~\"todo-frontend.*\", container!=\"\"}[2m])) by (pod)",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"todo\", pod=~\"todo-frontend.*\", container!=\"\"}[2m])) by (pod)",
               "legendFormat": "{{ pod }}"
             }
           ]
@@ -48,7 +48,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "decmbytes" } },
           "targets": [
             {
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo-prod\", pod=~\"todo-backend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-backend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
               "legendFormat": "{{ pod }}"
             }
           ]
@@ -61,7 +61,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "decmbytes" } },
           "targets": [
             {
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo-prod\", pod=~\"todo-frontend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"todo\", pod=~\"todo-frontend.*\", container!=\"\"}) by (pod) / 1024 / 1024",
               "legendFormat": "{{ pod }}"
             }
           ]
@@ -74,7 +74,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
-              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"todo-prod\", pod=~\"todo-backend.*\"}[1h])) by (pod, container)",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[1h])) by (pod, container)",
               "legendFormat": "{{ pod }} / {{ container }}"
             }
           ]
@@ -87,7 +87,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
-              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"todo-prod\", pod=~\"todo-frontend.*\"}[1h])) by (pod, container)",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"todo\", pod=~\"todo-frontend.*\"}[1h])) by (pod, container)",
               "legendFormat": "{{ pod }} / {{ container }}"
             }
           ]
@@ -100,11 +100,11 @@ data:
           "fieldConfig": { "defaults": { "unit": "KBs" } },
           "targets": [
             {
-              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"todo-prod\", pod=~\"todo-backend.*\"}[2m])) by (pod) / 1024",
+              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[2m])) by (pod) / 1024",
               "legendFormat": "rx {{ pod }}"
             },
             {
-              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"todo-prod\", pod=~\"todo-backend.*\"}[2m])) by (pod) / 1024",
+              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"todo\", pod=~\"todo-backend.*\"}[2m])) by (pod) / 1024",
               "legendFormat": "tx {{ pod }}"
             }
           ]
@@ -117,11 +117,11 @@ data:
           "fieldConfig": { "defaults": { "unit": "KBs" } },
           "targets": [
             {
-              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"todo-prod\", pod=~\"todo-frontend.*\"}[2m])) by (pod) / 1024",
+              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"todo\", pod=~\"todo-frontend.*\"}[2m])) by (pod) / 1024",
               "legendFormat": "rx {{ pod }}"
             },
             {
-              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"todo-prod\", pod=~\"todo-frontend.*\"}[2m])) by (pod) / 1024",
+              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"todo\", pod=~\"todo-frontend.*\"}[2m])) by (pod) / 1024",
               "legendFormat": "tx {{ pod }}"
             }
           ]
@@ -145,7 +145,7 @@ data:
           "gridPos": { "x": 12, "y": 32, "w": 6, "h": 8 },
           "targets": [
             {
-              "expr": "count(kube_pod_status_ready{namespace=\"todo-prod\", condition=\"true\", pod=~\"todo-backend.*\"})",
+              "expr": "count(kube_pod_status_ready{namespace=\"todo\", condition=\"true\", pod=~\"todo-backend.*\"})",
               "legendFormat": "pods"
             }
           ]
@@ -157,7 +157,7 @@ data:
           "gridPos": { "x": 18, "y": 32, "w": 6, "h": 8 },
           "targets": [
             {
-              "expr": "count(kube_pod_status_ready{namespace=\"todo-prod\", condition=\"true\", pod=~\"todo-frontend.*\"})",
+              "expr": "count(kube_pod_status_ready{namespace=\"todo\", condition=\"true\", pod=~\"todo-frontend.*\"})",
               "legendFormat": "pods"
             }
           ]
