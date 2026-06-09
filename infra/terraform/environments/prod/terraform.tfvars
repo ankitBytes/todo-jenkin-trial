@@ -50,7 +50,7 @@ s3_bucket_name = "todo-assets-prod-668076964228"
 cloudwatch_log_retention_days = 30
 
 # ── ALB ───────────────────────────────────────────────────────────────────────
-certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/e4a2f397-c129-4501-b3bd-b4ab9d6f22d7"
+certificate_arn = "arn:aws:acm:us-east-1:668076964228:certificate/8e9371ac-08ec-4a8f-ab4b-13efc04b823a"
 
 # ── EKS API endpoint access ───────────────────────────────────────────────────
 # IMPORTANT: Replace with your office/VPN CIDR before going live.
