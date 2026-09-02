@@ -73,6 +73,22 @@ module "ecr_backend" {
   image_retention_count = var.ecr_image_retention_count
 }
 
+module "ecr_stackpulse_frontend" {
+  source                = "./modules/ecr"
+  project_name          = var.project_name
+  environment           = var.environment
+  repo_name             = "stackpulse-frontend"
+  image_retention_count = var.ecr_image_retention_count
+}
+
+module "ecr_stackpulse_backend" {
+  source                = "./modules/ecr"
+  project_name          = var.project_name
+  environment           = var.environment
+  repo_name             = "stackpulse-backend"
+  image_retention_count = var.ecr_image_retention_count
+}
+
 module "eks" {
   source = "./modules/eks"
 

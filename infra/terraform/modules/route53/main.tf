@@ -63,3 +63,12 @@ resource "aws_route53_record" "grafana" {
     evaluate_target_health = true
   }
 }
+
+resource "aws_route53_record" "stackpulse" {
+  zone_id = module.route53.zone_id   # or data.aws_route53_zone.main.zone_id if you expose it
+  name    = "stackpulse.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  # Filled after first deploy — get this from: kubectl get ingress stackpulse-ingress -n stackpulse
+  records = ["__STACKPULSE_ALB_HOSTNAME__"]
+}
